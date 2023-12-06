@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -40,24 +41,57 @@ func NewManager(dataPath string, portStart, portEnd int) (*Manager, error) {
 		return nil, fmt.Errorf("failed to create Docker client: %v", err)
 	}
 
-	return &Manager{
+	m := &Manager{
 		client:    cli,
 		dataPath:  dataPath,
 		portStart: portStart,
 		portEnd:   portEnd,
 		portInUse: make(map[int]string),
-	}, nil
+	}
+
+	// Initialize port tracking by checking existing containers
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list containers: %v", err)
+	}
+
+	for _, cont := range containers {
+		if !strings.HasPrefix(cont.Image, "itzg/minecraft-server") {
+			continue
+		}
+
+		for _, p := range cont.Ports {
+			if p.PrivatePort == 25565 {
+				m.portInUse[int(p.PublicPort)] = strings.TrimPrefix(cont.Names[0], "/")
+				break
+			}
+		}
+	}
+
+	return m, nil
 }
 
 func (m *Manager) findAvailablePort() (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// First try to find a port in the configured range
 	for port := m.portStart; port <= m.portEnd; port++ {
-		if _, exists := m.portInUse[port]; !exists {
-			return port, nil
+		// Check if port is in use by our tracking
+		if _, exists := m.portInUse[port]; exists {
+			continue
 		}
+
+		// Check if port is in use by the system
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			continue
+		}
+		listener.Close()
+
+		return port, nil
 	}
+
 	return 0, fmt.Errorf("no available ports in range %d-%d", m.portStart, m.portEnd)
 }
 

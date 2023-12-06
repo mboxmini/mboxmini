@@ -26,9 +26,9 @@ func main() {
 	rateLimiter := middleware.NewRateLimiter()
 	apiKey := &middleware.APIKey{Key: apiKeyValue}
 
-	// Initialize Docker manager
+	// Initialize Docker manager with a wider port range
 	dataPath := os.Getenv("DATA_PATH")
-	manager, err := docker.NewManager(dataPath, 25565, 25575)
+	manager, err := docker.NewManager(dataPath, 25565, 25665)
 	if err != nil {
 		log.Fatal(err)
 	}
