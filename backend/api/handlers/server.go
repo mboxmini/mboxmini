@@ -38,14 +38,12 @@ func NewServerHandler(dm *docker.Manager) *ServerHandler {
 }
 
 func (h *ServerHandler) RegisterRoutes(r *mux.Router) {
-	api := r.PathPrefix("/api/servers").Subrouter()
-
-	api.HandleFunc("", h.ListServers).Methods("GET", "OPTIONS")
-	api.HandleFunc("", h.CreateServer).Methods("POST", "OPTIONS")
-	api.HandleFunc("/{id}", h.GetServerStatus).Methods("GET", "OPTIONS")
-	api.HandleFunc("/{id}/start", h.StartServer).Methods("POST", "OPTIONS")
-	api.HandleFunc("/{id}/stop", h.StopServer).Methods("POST", "OPTIONS")
-	api.HandleFunc("/{id}/command", h.ExecuteCommand).Methods("POST", "OPTIONS")
+	r.HandleFunc("/servers", h.ListServers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/servers", h.CreateServer).Methods("POST", "OPTIONS")
+	r.HandleFunc("/servers/{id}", h.GetServerStatus).Methods("GET", "OPTIONS")
+	r.HandleFunc("/servers/{id}/start", h.StartServer).Methods("POST", "OPTIONS")
+	r.HandleFunc("/servers/{id}/stop", h.StopServer).Methods("POST", "OPTIONS")
+	r.HandleFunc("/servers/{id}/command", h.ExecuteCommand).Methods("POST", "OPTIONS")
 }
 
 func (h *ServerHandler) ListServers(w http.ResponseWriter, r *http.Request) {
