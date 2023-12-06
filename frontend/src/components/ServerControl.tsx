@@ -1,8 +1,30 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, message } from 'antd';
+import { Form, Input, Button, message, Select } from 'antd';
 import styled from 'styled-components';
 import { createServer } from '../api/server';
 import { colors } from '../theme';
+
+// Common Minecraft versions
+const VERSION_OPTIONS = [
+  { label: '1.21.3 (Latest)', value: '1.21.3' },
+  { label: '1.20.4', value: '1.20.4' },
+  { label: '1.20.2', value: '1.20.2' },
+  { label: '1.19.4', value: '1.19.4' },
+  { label: '1.19.2', value: '1.19.2' },
+  { label: '1.18.2', value: '1.18.2' },
+  { label: '1.17.1', value: '1.17.1' },
+  { label: '1.16.5', value: '1.16.5' },
+];
+
+// Common memory options
+const MEMORY_OPTIONS = [
+  { label: '2GB (Recommended)', value: '2G' },
+  { label: '4GB', value: '4G' },
+  { label: '6GB', value: '6G' },
+  { label: '8GB', value: '8G' },
+  { label: '12GB', value: '12G' },
+  { label: '16GB', value: '16G' },
+];
 
 interface Props {
   serverId?: string;
@@ -18,6 +40,8 @@ interface ServerFormData {
 const ServerControl: React.FC<Props> = ({ serverId, onServerCreated }) => {
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm<ServerFormData>();
+  const [customMemory, setCustomMemory] = useState(false);
+  const [customVersion, setCustomVersion] = useState(false);
 
   const handleSubmit = async (values: ServerFormData) => {
     setLoading(true);
@@ -46,7 +70,7 @@ const ServerControl: React.FC<Props> = ({ serverId, onServerCreated }) => {
         form={form}
         onFinish={handleSubmit}
         layout="vertical"
-        initialValues={{ version: '1.21.3' }}
+        initialValues={{ version: '1.21.3', memory: '2G' }}
       >
         <Form.Item
           name="name"
@@ -68,12 +92,37 @@ const ServerControl: React.FC<Props> = ({ serverId, onServerCreated }) => {
           label={<StyledLabel>Minecraft Version</StyledLabel>}
           rules={[{ required: true, message: 'Please select a version' }]}
         >
-          <StyledInput placeholder="Enter version (e.g. 1.21.3)" />
+          {customVersion ? (
+            <StyledInput 
+              placeholder="Enter version (e.g. 1.21.3)"
+              suffix={
+                <Button type="link" size="small" onClick={() => setCustomVersion(false)}>
+                  Use preset
+                </Button>
+              }
+            />
+          ) : (
+            <StyledSelect
+              options={VERSION_OPTIONS}
+              dropdownStyle={{ background: colors.surface }}
+              dropdownMatchSelectWidth={false}
+              placeholder="Select Minecraft version"
+              dropdownRender={(menu) => (
+                <>
+                  {menu}
+                  <Divider />
+                  <Button type="link" onClick={() => setCustomVersion(true)}>
+                    Enter custom version
+                  </Button>
+                </>
+              )}
+            />
+          )}
         </Form.Item>
 
         <Form.Item
           name="memory"
-          label={<StyledLabel>Memory (optional)</StyledLabel>}
+          label={<StyledLabel>Memory</StyledLabel>}
           rules={[
             {
               pattern: /^[0-9]+[MG]$/,
@@ -81,7 +130,32 @@ const ServerControl: React.FC<Props> = ({ serverId, onServerCreated }) => {
             },
           ]}
         >
-          <StyledInput placeholder="Enter memory (e.g. 2G)" />
+          {customMemory ? (
+            <StyledInput 
+              placeholder="Enter memory (e.g. 2G or 2048M)"
+              suffix={
+                <Button type="link" size="small" onClick={() => setCustomMemory(false)}>
+                  Use preset
+                </Button>
+              }
+            />
+          ) : (
+            <StyledSelect
+              options={MEMORY_OPTIONS}
+              dropdownStyle={{ background: colors.surface }}
+              dropdownMatchSelectWidth={false}
+              placeholder="Select memory allocation"
+              dropdownRender={(menu) => (
+                <>
+                  {menu}
+                  <Divider />
+                  <Button type="link" onClick={() => setCustomMemory(true)}>
+                    Enter custom value
+                  </Button>
+                </>
+              )}
+            />
+          )}
         </Form.Item>
 
         <Form.Item>
@@ -119,8 +193,40 @@ const StyledInput = styled(Input)`
   }
 `;
 
+const StyledSelect = styled(Select)`
+  &.ant-select {
+    width: 100%;
+  }
+
+  .ant-select-selector {
+    background: ${colors.surface} !important;
+    border: 1px solid ${colors.border} !important;
+    color: ${colors.text} !important;
+  }
+
+  &:hover .ant-select-selector,
+  &.ant-select-focused .ant-select-selector {
+    border-color: ${colors.accent1} !important;
+    background: ${colors.background} !important;
+  }
+
+  .ant-select-selection-placeholder {
+    color: ${colors.textSecondary} !important;
+  }
+
+  .ant-select-arrow {
+    color: ${colors.text};
+  }
+`;
+
 const StyledLabel = styled.span`
   color: ${colors.text};
+`;
+
+const Divider = styled.div`
+  height: 1px;
+  background: ${colors.border};
+  margin: 8px 0;
 `;
 
 export default ServerControl;
