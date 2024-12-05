@@ -1,0 +1,31 @@
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Binary files
+bin/
+*.exe
+server
+
+# Environment files
+.env
+scripts/config/*.env
+!scripts/config/dev.env
+
+# Logs
+logs/
+*.log
+
+# Dependencies
+vendor/
+
+# Minecraft server data
+minecraft-data/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db 
