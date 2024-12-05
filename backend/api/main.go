@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/mboxmini/mboxmini/backend/api/config"
@@ -25,6 +26,7 @@ func main() {
 	rateLimiter := middleware.NewRateLimiter()
 	apiKey := &middleware.APIKey{Key: apiKeyValue}
 
+	// Initialize Docker manager
 	dockerManager, err := docker.NewManager(
 		cfg.ContainerName,
 		cfg.DockerImage,
@@ -35,8 +37,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Initialize handlers
 	serverHandler := handlers.NewServerHandler(dockerManager)
 
+	// Initialize router
 	r := mux.NewRouter()
 
 	// Add middleware to all routes
@@ -44,5 +48,12 @@ func main() {
 	r.Use(rateLimiter.RateLimit)
 	r.Use(apiKey.Authenticate)
 
-	// ... rest of the implementation
+	// Register routes
+	serverHandler.RegisterRoutes(r)
+
+	// Start server
+	log.Printf("Starting server on :%s", cfg.Port)
+	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
+		log.Fatal(err)
+	}
 }
