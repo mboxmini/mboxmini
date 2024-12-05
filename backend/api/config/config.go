@@ -14,6 +14,6 @@ func NewDefaultConfig() *Config {
 		Port:           "8080",
 		ContainerName:  "mboxmini-server",
 		DockerImage:    "itzg/minecraft-server:latest",
-		DataVolumePath: "./minecraft-data",
+		DataVolumePath: "/data",
 	}
 }

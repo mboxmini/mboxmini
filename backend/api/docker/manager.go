@@ -46,8 +46,19 @@ func (m *Manager) StartContainer(env []string) error {
 	log.Printf("Starting container with parameters:")
 	log.Printf("- Image: %s", m.image)
 	log.Printf("- Container name: %s", m.containerName)
-	log.Printf("- Data path: %s", m.dataPath)
 	log.Printf("- Environment variables: %v", env)
+
+	// Build equivalent docker command for logging
+	dockerCmd := "docker run -d"
+	dockerCmd += fmt.Sprintf(" --name %s", m.containerName)
+	for _, e := range env {
+		dockerCmd += fmt.Sprintf(" -e %q", e)
+	}
+	dockerCmd += " -p 25565:25565"
+	dockerCmd += " -v ./minecraft-data:/data"
+	dockerCmd += fmt.Sprintf(" %s", m.image)
+
+	log.Printf("Equivalent Docker command:\n%s", dockerCmd)
 
 	// Pull the image
 	log.Printf("Pulling image %s", m.image)
@@ -128,7 +139,7 @@ func (m *Manager) StartContainer(env []string) error {
 			Mounts: []mount.Mount{
 				{
 					Type:   mount.TypeBind,
-					Source: "./minecraft-data", // Use relative path
+					Source: m.dataPath, // Use the absolute path from Manager
 					Target: "/data",
 				},
 			},
@@ -192,32 +203,48 @@ func (m *Manager) GetContainerStatus() (string, error) {
 
 func (m *Manager) ExecuteCommand(ctx context.Context, cmd string) error {
 	execConfig := types.ExecConfig{
+		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd:          strings.Split(cmd, " "),
+		Tty:          true,
+		Cmd:          []string{"rcon-cli", cmd},
 	}
+
+	log.Printf("Executing command in container: %v", execConfig.Cmd)
 
 	execID, err := m.client.ContainerExecCreate(ctx, m.containerName, execConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create exec: %v", err)
 	}
 
-	if err := m.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{}); err != nil {
-		return fmt.Errorf("failed to start exec: %v", err)
+	resp, err := m.client.ContainerExecAttach(ctx, execID.ID, types.ExecStartCheck{})
+	if err != nil {
+		return fmt.Errorf("failed to attach to exec: %v", err)
+	}
+	defer resp.Close()
+
+	output, err := io.ReadAll(resp.Reader)
+	if err != nil {
+		return fmt.Errorf("failed to read exec output: %v", err)
 	}
 
+	log.Printf("Command output: %s", string(output))
 	return nil
 }
 
 func (m *Manager) ListPlayers() ([]string, error) {
 	ctx := context.Background()
 
-	// Execute list players command
+	// Execute list command using rcon-cli
 	execConfig := types.ExecConfig{
+		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd:          []string{"list", "players"},
+		Tty:          true,
+		Cmd:          []string{"rcon-cli", "list"},
 	}
+
+	log.Printf("Executing list command: %v", execConfig.Cmd)
 
 	execID, err := m.client.ContainerExecCreate(ctx, m.containerName, execConfig)
 	if err != nil {
@@ -235,9 +262,11 @@ func (m *Manager) ListPlayers() ([]string, error) {
 		return nil, fmt.Errorf("failed to read exec output: %v", err)
 	}
 
-	// Parse the output to extract player names
 	outputStr := string(output)
-	if strings.Contains(outputStr, "There are 0 of a max of") {
+	log.Printf("List command output: %s", outputStr)
+
+	// Parse the output to extract player names
+	if strings.Contains(outputStr, "There are 0") {
 		return []string{}, nil
 	}
 
@@ -246,9 +275,14 @@ func (m *Manager) ListPlayers() ([]string, error) {
 	lines := strings.Split(outputStr, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "players online:") {
-			playerList := strings.Split(line, ":")[1]
-			playerNames := strings.Split(strings.TrimSpace(playerList), ", ")
-			players = append(players, playerNames...)
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				playerList := strings.TrimSpace(parts[1])
+				if playerList != "" {
+					playerNames := strings.Split(playerList, ", ")
+					players = append(players, playerNames...)
+				}
+			}
 		}
 	}
 
