@@ -31,7 +31,8 @@ const StyledInput = styled(Input)`
   border: 1px solid ${colors.border};
   color: ${colors.text};
 
-  &:hover, &:focus {
+  &:hover,
+  &:focus {
     border-color: ${colors.accent1};
   }
 
@@ -80,16 +81,11 @@ const Console: React.FC = () => {
         <StyledInput
           placeholder="Enter server command..."
           value={command}
-          onChange={(e) => setCommand(e.target.value)}
+          onChange={e => setCommand(e.target.value)}
           onKeyPress={handleKeyPress}
           disabled={loading}
         />
-        <Button
-          type="primary"
-          icon={<SendOutlined />}
-          onClick={handleExecute}
-          loading={loading}
-        >
+        <Button type="primary" icon={<SendOutlined />} onClick={handleExecute} loading={loading}>
           Execute
         </Button>
       </InputGroup>
@@ -97,4 +93,4 @@ const Console: React.FC = () => {
   );
 };
 
-export default Console; 
+export default Console;

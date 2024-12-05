@@ -112,11 +112,7 @@ const ServerControl: React.FC = () => {
         >
           Stop Server
         </Button>
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={fetchStatus}
-          loading={loading}
-        >
+        <Button icon={<ReloadOutlined />} onClick={fetchStatus} loading={loading}>
           Refresh Status
         </Button>
       </Space>
@@ -124,4 +120,4 @@ const ServerControl: React.FC = () => {
   );
 };
 
-export default ServerControl; 
+export default ServerControl;

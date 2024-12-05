@@ -75,7 +75,7 @@ const PlayerList: React.FC = () => {
           locale={{
             emptyText: 'No players online',
           }}
-          renderItem={(player) => (
+          renderItem={player => (
             <List.Item>
               <PlayerAvatar icon={<UserOutlined />} />
               <PlayerName>{player}</PlayerName>
@@ -87,4 +87,4 @@ const PlayerList: React.FC = () => {
   );
 };
 
-export default PlayerList; 
+export default PlayerList;

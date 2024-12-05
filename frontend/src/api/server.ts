@@ -6,7 +6,7 @@ const API_KEY = process.env.REACT_APP_API_KEY || '';
 const api = axios.create({
   baseURL: API_URL,
   headers: {
-    'Authorization': `Bearer ${API_KEY}`,
+    Authorization: `Bearer ${API_KEY}`,
     'Content-Type': 'application/json',
   },
 });
@@ -29,4 +29,4 @@ export const executeCommand = (command: string) => {
 
 export const getPlayers = () => {
   return api.get('/api/server/players');
-}; 
+};
