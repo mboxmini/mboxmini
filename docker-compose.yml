@@ -19,7 +19,7 @@ services:
     environment:
       EULA: "TRUE"
       MEMORY: "${MAX_MEMORY:-2G}"
-      VERSION: "${MINECRAFT_VERSION:-1.20.4}"
+      VERSION: "${MINECRAFT_VERSION:-1.21.3}"
       TYPE: "VANILLA"
     volumes:
       - ./minecraft-data:/data

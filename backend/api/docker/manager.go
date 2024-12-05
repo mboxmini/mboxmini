@@ -28,6 +28,9 @@ func NewManager(containerName, image, dataPath string, maxMemoryMB int) (*Manage
 		return nil, fmt.Errorf("failed to create Docker client: %v", err)
 	}
 
+	// Use the provided dataPath directly
+	log.Printf("Initializing Docker manager with data path: %s", dataPath)
+
 	return &Manager{
 		client:        cli,
 		containerName: containerName,
@@ -40,8 +43,11 @@ func NewManager(containerName, image, dataPath string, maxMemoryMB int) (*Manage
 func (m *Manager) StartContainer(env []string) error {
 	ctx := context.Background()
 
-	log.Printf("Starting container with image: %s", m.image)
-	log.Printf("Environment variables: %v", env)
+	log.Printf("Starting container with parameters:")
+	log.Printf("- Image: %s", m.image)
+	log.Printf("- Container name: %s", m.containerName)
+	log.Printf("- Data path: %s", m.dataPath)
+	log.Printf("- Environment variables: %v", env)
 
 	// Pull the image
 	log.Printf("Pulling image %s", m.image)
@@ -113,22 +119,28 @@ func (m *Manager) StartContainer(env []string) error {
 	}
 
 	if needNewContainer {
-		log.Printf("Creating new container with name: %s", m.containerName)
-		resp, err := m.client.ContainerCreate(ctx, &container.Config{
+		log.Printf("Creating new container with configuration:")
+		containerConfig := &container.Config{
 			Image: m.image,
 			Env:   env,
-		}, &container.HostConfig{
+		}
+		hostConfig := &container.HostConfig{
 			Mounts: []mount.Mount{
 				{
 					Type:   mount.TypeBind,
-					Source: m.dataPath,
+					Source: "./minecraft-data", // Use relative path
 					Target: "/data",
 				},
 			},
 			PortBindings: nat.PortMap{
 				"25565/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: "25565"}},
 			},
-		}, nil, nil, m.containerName)
+		}
+
+		log.Printf("Container config: %+v", containerConfig)
+		log.Printf("Host config: %+v", hostConfig)
+
+		resp, err := m.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, m.containerName)
 		if err != nil {
 			return fmt.Errorf("failed to create container: %v", err)
 		}

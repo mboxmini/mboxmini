@@ -3,6 +3,7 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,7 @@ func Logging(next http.Handler) http.Handler {
 }
 
 type RateLimiter struct {
+	mu       sync.Mutex
 	requests map[string][]time.Time
 	limit    int           // Number of requests
 	window   time.Duration // Time window
@@ -48,6 +50,7 @@ func (rl *RateLimiter) RateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
 
+		rl.mu.Lock()
 		// Clean old requests
 		now := time.Now()
 		if times, exists := rl.requests[ip]; exists {
@@ -62,12 +65,14 @@ func (rl *RateLimiter) RateLimit(next http.Handler) http.Handler {
 
 		// Check rate limit
 		if len(rl.requests[ip]) >= rl.limit {
+			rl.mu.Unlock()
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
 
 		// Add current request
 		rl.requests[ip] = append(rl.requests[ip], now)
+		rl.mu.Unlock()
 
 		next.ServeHTTP(w, r)
 	})
