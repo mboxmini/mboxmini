@@ -1,26 +1,69 @@
-import { Routes, Route } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
-import theme from './theme';
-import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import ServerControl from './pages/ServerControl';
-import Players from './pages/Players';
-import Settings from './pages/Settings';
+import React from 'react';
+import { ConfigProvider, Layout } from 'antd';
+import styled from 'styled-components';
+import { theme, colors } from './theme';
+import ServerControl from './components/ServerControl';
+import PlayerList from './components/PlayerList';
+import Console from './components/Console';
 
-function App() {
+const { Header, Content } = Layout;
+
+const StyledLayout = styled(Layout)`
+  min-height: 100vh;
+  background: ${colors.background};
+`;
+
+const StyledHeader = styled(Header)`
+  background: ${colors.surface};
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid ${colors.border};
+`;
+
+const Logo = styled.div`
+  color: ${colors.text};
+  font-size: 24px;
+  font-weight: bold;
+  background: ${colors.gradient};
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+`;
+
+const StyledContent = styled(Content)`
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 24px;
+
+  @media (max-width: ${({ theme }) => theme.breakpoints?.md}) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const MainSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+`;
+
+const App: React.FC = () => {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/control" element={<ServerControl />} />
-          <Route path="/players" element={<Players />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </Layout>
-    </ThemeProvider>
+    <ConfigProvider theme={theme}>
+      <StyledLayout>
+        <StyledHeader>
+          <Logo>MboxMini</Logo>
+        </StyledHeader>
+        <StyledContent>
+          <MainSection>
+            <ServerControl />
+            <Console />
+          </MainSection>
+          <PlayerList />
+        </StyledContent>
+      </StyledLayout>
+    </ConfigProvider>
   );
-}
+};
 
 export default App; 
