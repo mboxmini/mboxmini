@@ -1,8 +1,25 @@
-# MboxMini
+# 🎮 MboxMini
 
-A lightweight Minecraft server manager with a secure API interface. MboxMini allows you to easily deploy and manage your own Minecraft server on your local machine or mini PC, with features similar to popular hosting services.
+[![License](https://img.shields.io/badge/license-Dual%20License-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.22%2B-00ADD8?style=flat&logo=go)](https://golang.org/dl/)
+[![Docker](https://img.shields.io/badge/Docker-Required-2496ED?style=flat&logo=docker)](https://docs.docker.com/get-docker/)
+[![Discord](https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=ffffff)](https://discord.gg/mboxmini)
+[![GitHub Issues](https://img.shields.io/github/issues/mboxmini/mboxmini)](https://github.com/mboxmini/mboxmini/issues)
+[![GitHub Stars](https://img.shields.io/github/stars/mboxmini/mboxmini)](https://github.com/mboxmini/mboxmini/stargazers)
 
-## Quick Start
+🚀 A lightweight Minecraft server manager with a secure API interface. MboxMini allows you to easily deploy and manage your own Minecraft server on your local machine or mini PC, with features similar to popular hosting services.
+
+## ✨ Features
+
+- 🔒 Secure API with key authentication
+- 🐳 Docker-based deployment
+- 🎮 Full Minecraft server control
+- 📊 Server status monitoring
+- 👥 Player management
+- ⚡ Easy to set up and use
+- 🔧 Configurable settings
+
+## 🚀 Quick Start
 
 1. Clone the repository:
 ```bash
@@ -17,11 +34,11 @@ chmod +x scripts/setup.sh
 ```
 
 This will:
-- Generate a secure API key
-- Create environment configuration
-- Install backend dependencies
-- Install frontend dependencies
-- Set up necessary directories
+- 🔑 Generate a secure API key
+- ⚙️ Create environment configuration
+- 📦 Install backend dependencies
+- 🎨 Install frontend dependencies
+- 📁 Set up necessary directories
 
 3. Start the services:
 ```bash
@@ -29,10 +46,10 @@ docker-compose up -d
 ```
 
 Your server will be available at:
-- Minecraft Server: `localhost:25565`
-- Management API: `http://localhost:8080`
+- 🎮 Minecraft Server: `localhost:25565`
+- 🔧 Management API: `http://localhost:8080`
 
-## Configuration
+## ⚙️ Configuration
 
 Environment variables are automatically configured during setup in:
 - `scripts/config/mac.env` - macOS configuration
@@ -45,12 +62,12 @@ Key configuration options:
 - `API_PORT` - API server port (default: 8080)
 - `MAX_MEMORY` - Maximum memory allocation (default: 2G)
 
-## Development Setup
+## 💻 Development Setup
 
 ### Prerequisites
-- Docker and Docker Compose
-- Go 1.22 or later
-- Node.js and npm (for frontend)
+- 🐳 Docker and Docker Compose
+- 🔧 Go 1.22 or later
+- 📦 Node.js and npm (for frontend)
 
 ### Backend Development
 ```bash
@@ -66,7 +83,7 @@ npm install
 npm start
 ```
 
-## Docker Commands
+## 🐳 Docker Commands
 
 Common operations:
 ```bash
@@ -84,7 +101,7 @@ docker-compose pull
 docker-compose up -d --build
 ```
 
-## API Documentation
+## 🔧 API Documentation
 
 All endpoints require authentication using the API key in the header:
 ```
@@ -92,14 +109,14 @@ Authorization: Bearer <YOUR_API_KEY>
 ```
 
 Available endpoints:
-- `POST /api/server/start` - Start server
-- `POST /api/server/stop` - Stop server
-- `GET /api/server/status` - Get server status
-- `POST /api/server/command` - Execute command
-- `GET /api/server/players` - List online players
-- `POST /api/server/config` - Update server properties
+- 🟢 `POST /api/server/start` - Start server
+- 🔴 `POST /api/server/stop` - Stop server
+- 📊 `GET /api/server/status` - Get server status
+- 🔧 `POST /api/server/command` - Execute command
+- 👥 `GET /api/server/players` - List online players
+- ⚙️ `POST /api/server/config` - Update server properties
 
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -107,18 +124,18 @@ Available endpoints:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request at [github.com/mboxmini/mboxmini](https://github.com/mboxmini/mboxmini)
 
-## License
+## 📜 License
 
 MboxMini uses a dual-licensing model:
 
-### Personal Use License (Free)
+### 🆓 Personal Use License (Free)
 - Running the server for personal enjoyment
 - Learning and educational purposes
 - Contributing to the project
 - Modifying for personal use
 - Non-commercial use only
 
-### Commercial Use License (Paid)
+### 💰 Commercial Use License (Paid)
 A commercial license is required for:
 - Running the server as part of a business operation
 - Generating revenue directly or indirectly using the software
@@ -130,15 +147,25 @@ For commercial licensing inquiries, please contact the project team.
 ### Terms
 All contributions to the project are welcome and will be licensed under these same terms. See the [LICENSE](LICENSE) file for the complete license text.
 
-## Support
+## 🌟 Community & Support
+
+Join our growing community:
+
+[![Discord](https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=ffffff)](https://discord.gg/mboxmini)
+[![GitHub Discussions](https://img.shields.io/github/discussions/mboxmini/mboxmini?label=Discussions&logo=github)](https://github.com/mboxmini/mboxmini/discussions)
+[![Twitter Follow](https://img.shields.io/twitter/follow/mboxmini?style=social)](https://twitter.com/mboxmini)
 
 For support:
-1. Check the [Issues](https://github.com/mboxmini/mboxmini/issues) page
-2. Create a new issue if needed
-3. Join our community discussions in [Discussions](https://github.com/mboxmini/mboxmini/discussions)
+1. 📋 Check the [Issues](https://github.com/mboxmini/mboxmini/issues) page
+2. 💡 Create a new issue if needed
+3. 💬 Join our [Discord community](https://discord.gg/mboxmini)
+4. 🗣️ Participate in [Discussions](https://github.com/mboxmini/mboxmini/discussions)
 
-## Acknowledgments
+## 👏 Acknowledgments
 
-- [itzg/minecraft-server](https://github.com/itzg/docker-minecraft-server) for the excellent Minecraft server Docker image
-- The Minecraft community
-- All our contributors
+- 🎮 [itzg/minecraft-server](https://github.com/itzg/docker-minecraft-server) for the excellent Minecraft server Docker image
+- 🌟 The Minecraft community
+- 💖 All our contributors
+
+---
+<p align="center">Made with ❤️ by the MboxMini Team</p>
