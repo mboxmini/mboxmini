@@ -1,4 +1,4 @@
-module mboxmini
+module github.com/mboxmini/mboxmini/backend
 
 go 1.22
 

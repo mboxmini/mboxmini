@@ -4,10 +4,10 @@ import (
 	"log"
 	"os"
 
-	"mboxmini/backend/api/config"
-	"mboxmini/backend/api/docker"
-	"mboxmini/backend/api/handlers"
-	"mboxmini/backend/api/middleware"
+	"github.com/mboxmini/mboxmini/backend/api/config"
+	"github.com/mboxmini/mboxmini/backend/api/docker"
+	"github.com/mboxmini/mboxmini/backend/api/handlers"
+	"github.com/mboxmini/mboxmini/backend/api/middleware"
 
 	"github.com/gorilla/mux"
 )
