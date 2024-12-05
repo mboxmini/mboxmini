@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -36,66 +37,97 @@ func NewManager(containerName, image, dataPath string, maxMemoryMB int) (*Manage
 	}, nil
 }
 
-func (m *Manager) StartServer(ctx context.Context) error {
+func (m *Manager) StartContainer() error {
+	ctx := context.Background()
+
+	// Pull the image
+	reader, err := m.client.ImagePull(ctx, m.image, types.ImagePullOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to pull image: %v", err)
+	}
+	io.Copy(io.Discard, reader)
+
+	// Create container if it doesn't exist
 	containers, err := m.client.ContainerList(ctx, types.ContainerListOptions{All: true})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %v", err)
 	}
 
 	var containerID string
-	for _, container := range containers {
-		for _, name := range container.Names {
-			if name == "/"+m.containerName {
-				containerID = container.ID
-				break
-			}
+	for _, cont := range containers {
+		if cont.Names[0] == "/"+m.containerName {
+			containerID = cont.ID
+			break
 		}
 	}
 
 	if containerID == "" {
-		// Create container if it doesn't exist
-		resp, err := m.client.ContainerCreate(ctx,
-			&container.Config{
-				Image: m.image,
-				Env:   []string{"EULA=TRUE"},
-				ExposedPorts: nat.PortSet{
-					"25565/tcp": struct{}{},
+		// Create new container
+		resp, err := m.client.ContainerCreate(ctx, &container.Config{
+			Image: m.image,
+			Env: []string{
+				"EULA=TRUE",
+				"MEMORY=" + m.maxMemory,
+			},
+		}, &container.HostConfig{
+			Mounts: []mount.Mount{
+				{
+					Type:   mount.TypeBind,
+					Source: m.dataPath,
+					Target: "/data",
 				},
 			},
-			&container.HostConfig{
-				Mounts: []mount.Mount{
-					{
-						Type:   mount.TypeBind,
-						Source: m.dataPath,
-						Target: "/data",
-					},
-				},
-				PortBindings: nat.PortMap{
-					"25565/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: "25565"}},
-				},
+			PortBindings: nat.PortMap{
+				"25565/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: "25565"}},
 			},
-			nil,
-			nil,
-			m.containerName,
-		)
+		}, nil, nil, m.containerName)
 		if err != nil {
 			return fmt.Errorf("failed to create container: %v", err)
 		}
 		containerID = resp.ID
 	}
 
-	return m.client.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
+	// Start the container
+	if err := m.client.ContainerStart(ctx, containerID, types.ContainerStartOptions{}); err != nil {
+		return fmt.Errorf("failed to start container: %v", err)
+	}
+
+	return nil
 }
 
-func (m *Manager) StopServer(ctx context.Context) error {
-	return m.client.ContainerStop(ctx, m.containerName, container.StopOptions{})
+func (m *Manager) StopContainer() error {
+	ctx := context.Background()
+	timeout := 30 * time.Second
+
+	if err := m.client.ContainerStop(ctx, m.containerName, &timeout); err != nil {
+		return fmt.Errorf("failed to stop container: %v", err)
+	}
+
+	return nil
 }
 
-func (m *Manager) ExecuteCommand(ctx context.Context, command string) error {
+func (m *Manager) GetContainerStatus() (string, error) {
+	ctx := context.Background()
+
+	containers, err := m.client.ContainerList(ctx, types.ContainerListOptions{All: true})
+	if err != nil {
+		return "", fmt.Errorf("failed to list containers: %v", err)
+	}
+
+	for _, cont := range containers {
+		if cont.Names[0] == "/"+m.containerName {
+			return cont.State, nil
+		}
+	}
+
+	return "not found", nil
+}
+
+func (m *Manager) ExecuteCommand(ctx context.Context, cmd string) error {
 	execConfig := types.ExecConfig{
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd:          []string{"rcon-cli", command},
+		Cmd:          strings.Split(cmd, " "),
 	}
 
 	execID, err := m.client.ContainerExecCreate(ctx, m.containerName, execConfig)
@@ -103,37 +135,21 @@ func (m *Manager) ExecuteCommand(ctx context.Context, command string) error {
 		return fmt.Errorf("failed to create exec: %v", err)
 	}
 
-	return m.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{})
-}
-
-func (m *Manager) GetServerStatus(ctx context.Context) (map[string]interface{}, error) {
-	containers, err := m.client.ContainerList(ctx, types.ContainerListOptions{All: true})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list containers: %v", err)
+	if err := m.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{}); err != nil {
+		return fmt.Errorf("failed to start exec: %v", err)
 	}
 
-	status := make(map[string]interface{})
-	for _, container := range containers {
-		for _, name := range container.Names {
-			if name == "/"+m.containerName {
-				status["status"] = container.State
-				status["running"] = container.State == "running"
-				return status, nil
-			}
-		}
-	}
-
-	return map[string]interface{}{
-		"status":  "not found",
-		"running": false,
-	}, nil
+	return nil
 }
 
-func (m *Manager) GetOnlinePlayers(ctx context.Context) ([]string, error) {
+func (m *Manager) ListPlayers() ([]string, error) {
+	ctx := context.Background()
+
+	// Execute list players command
 	execConfig := types.ExecConfig{
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd:          []string{"rcon-cli", "list"},
+		Cmd:          []string{"list", "players"},
 	}
 
 	execID, err := m.client.ContainerExecCreate(ctx, m.containerName, execConfig)
@@ -152,38 +168,22 @@ func (m *Manager) GetOnlinePlayers(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("failed to read exec output: %v", err)
 	}
 
-	players := strings.Split(string(output), ":")
-	if len(players) < 2 {
+	// Parse the output to extract player names
+	outputStr := string(output)
+	if strings.Contains(outputStr, "There are 0 of a max of") {
 		return []string{}, nil
 	}
 
-	playerList := strings.Split(strings.TrimSpace(players[1]), ",")
-	if len(playerList) == 1 && playerList[0] == "" {
-		return []string{}, nil
+	// Extract player names from the output
+	players := []string{}
+	lines := strings.Split(outputStr, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "players online:") {
+			playerList := strings.Split(line, ":")[1]
+			playerNames := strings.Split(strings.TrimSpace(playerList), ", ")
+			players = append(players, playerNames...)
+		}
 	}
 
-	return playerList, nil
-}
-
-func (m *Manager) UpdateServerProperties(ctx context.Context, properties map[string]string) error {
-	execConfig := types.ExecConfig{
-		AttachStdout: true,
-		AttachStderr: true,
-		Cmd:          []string{"sh", "-c", fmt.Sprintf("cd /data && echo '%s' > server.properties", m.formatProperties(properties))},
-	}
-
-	execID, err := m.client.ContainerExecCreate(ctx, m.containerName, execConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create exec: %v", err)
-	}
-
-	return m.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{})
-}
-
-func (m *Manager) formatProperties(properties map[string]string) string {
-	var sb strings.Builder
-	for key, value := range properties {
-		sb.WriteString(fmt.Sprintf("%s=%s\n", key, value))
-	}
-	return sb.String()
+	return players, nil
 }

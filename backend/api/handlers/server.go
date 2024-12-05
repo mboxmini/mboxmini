@@ -60,7 +60,7 @@ func (h *ServerHandler) ExecuteCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.dockerManager.ExecuteCommand(cmd.Command); err != nil {
+	if err := h.dockerManager.ExecuteCommand(r.Context(), cmd.Command); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
