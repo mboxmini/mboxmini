@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/license-Dual%20License-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.22%2B-00ADD8?style=flat&logo=go)](https://golang.org/dl/)
 [![Docker](https://img.shields.io/badge/Docker-Required-2496ED?style=flat&logo=docker)](https://docs.docker.com/get-docker/)
-[![Discord](https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=ffffff)](https://discord.gg/cuv3HtA55G)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.gg/cuv3HtA55G)
 [![GitHub Issues](https://img.shields.io/github/issues/mboxmini/mboxmini)](https://github.com/mboxmini/mboxmini/issues)
 [![GitHub Stars](https://img.shields.io/github/stars/mboxmini/mboxmini)](https://github.com/mboxmini/mboxmini/stargazers)
 
@@ -47,7 +47,7 @@ docker-compose up -d
 
 Your server will be available at:
 - 🎮 Minecraft Server: `localhost:25565`
-- ���� Management API: `http://localhost:8080`
+- 📊 Management API: `http://localhost:8080`
 
 ## ⚙️ Configuration
 
@@ -151,7 +151,7 @@ All contributions to the project are welcome and will be licensed under these sa
 
 Join our growing community:
 
-[![Discord](https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=ffffff)](https://discord.gg/cuv3HtA55G)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.gg/cuv3HtA55G)
 [![GitHub Discussions](https://img.shields.io/github/discussions/mboxmini/mboxmini?label=Discussions&logo=github)](https://github.com/mboxmini/mboxmini/discussions)
 [![Twitter Follow](https://img.shields.io/twitter/follow/mboxmini?style=social)](https://twitter.com/mboxmini)
 
