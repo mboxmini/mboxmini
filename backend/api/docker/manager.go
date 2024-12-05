@@ -99,7 +99,9 @@ func (m *Manager) StopContainer() error {
 	ctx := context.Background()
 	timeout := 30 * time.Second
 
-	if err := m.client.ContainerStop(ctx, m.containerName, &timeout); err != nil {
+	if err := m.client.ContainerStop(ctx, m.containerName, container.StopOptions{
+		Timeout: &timeout,
+	}); err != nil {
 		return fmt.Errorf("failed to stop container: %v", err)
 	}
 
