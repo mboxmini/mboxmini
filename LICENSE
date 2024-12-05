@@ -1,21 +1,38 @@
-MIT License
+Dual License - Personal Use and Commercial Use
 
 Copyright (c) 2024 MboxMini
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Personal Use License (Free)
+----------------------------
+Permission is hereby granted, free of charge, to any individual for personal, non-commercial use of this software, including:
+- Running the software for personal enjoyment
+- Contributing to the project
+- Modifying the software for personal use
+- Learning and educational purposes
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+This personal use license is subject to the following conditions:
+a) The above copyright notice and this permission notice shall be included in all copies or portions of the Software
+b) The software cannot be used for any commercial, business, or revenue-generating purposes
+c) Contributions to the project are welcome and will be licensed under these same terms
 
+2. Commercial Use License (Paid)
+-----------------------------
+Any use of this software for commercial purposes, including but not limited to:
+- Running the software as part of a business operation
+- Generating revenue directly or indirectly using this software
+- Providing services based on this software
+- Using the software in a commercial hosting environment
+
+Requires a separate commercial license. Please contact the copyright holders for commercial licensing terms and pricing.
+
+3. General Terms
+--------------
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE. 
+SOFTWARE.
+
+For commercial licensing inquiries, please contact: [Your Contact Information] 
