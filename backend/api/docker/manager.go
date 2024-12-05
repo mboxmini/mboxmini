@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -97,10 +96,10 @@ func (m *Manager) StartContainer() error {
 
 func (m *Manager) StopContainer() error {
 	ctx := context.Background()
-	timeout := 30 * time.Second
+	timeoutSeconds := 30
 
 	if err := m.client.ContainerStop(ctx, m.containerName, container.StopOptions{
-		Timeout: &timeout,
+		Timeout: &timeoutSeconds,
 	}); err != nil {
 		return fmt.Errorf("failed to stop container: %v", err)
 	}
