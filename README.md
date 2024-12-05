@@ -1,12 +1,12 @@
 # MboxMini
 
-A lightweight Minecraft server manager with a secure API interface. MboxMini allows young developers to easily deploy and manage their own Minecraft servers with features similar to popular hosting services.
+A lightweight Minecraft server manager with a secure API interface. MboxMini allows you to easily deploy and manage your own Minecraft server on your local machine or mini PC, with features similar to popular hosting services.
 
 ## Quick Start
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/mboxmini.git
+git clone https://github.com/mboxmini/mboxmini.git
 cd mboxmini
 ```
 
@@ -18,126 +18,86 @@ chmod +x scripts/setup.sh
 
 This will:
 - Generate a secure API key
-- Create platform-specific configuration
-- Install as a system service
-- Start the server
+- Create environment configuration
+- Install backend dependencies
+- Install frontend dependencies
+- Set up necessary directories
 
-3. Control the service:
+3. Start the services:
 ```bash
-./scripts/control.sh start   # Start the service
-./scripts/control.sh stop    # Stop the service
-./scripts/control.sh status  # Check service status
+docker-compose up -d
 ```
+
+Your server will be available at:
+- Minecraft Server: `localhost:25565`
+- Management API: `http://localhost:8080`
 
 ## Configuration
 
-Environment variables are stored in platform-specific files:
+Environment variables are automatically configured during setup in:
 - `scripts/config/mac.env` - macOS configuration
 - `scripts/config/linux.env` - Linux configuration
 - `scripts/config/windows.env` - Windows configuration
 
 Key configuration options:
-- `API_KEY` - Authentication key for API access
+- `API_KEY` - Authentication key for API access (auto-generated)
 - `MINECRAFT_PORT` - Minecraft server port (default: 25565)
 - `API_PORT` - API server port (default: 8080)
 - `MAX_MEMORY` - Maximum memory allocation (default: 2G)
 
-## Service Management
+## Development Setup
 
-### macOS
-The service is managed through launchd:
+### Prerequisites
+- Docker and Docker Compose
+- Go 1.22 or later
+- Node.js and npm (for frontend)
+
+### Backend Development
 ```bash
-# Start service
-launchctl load ~/Library/LaunchAgents/com.mboxmini.server.plist
-
-# Stop service
-launchctl unload ~/Library/LaunchAgents/com.mboxmini.server.plist
-```
-
-### Linux
-The service is managed through systemd:
-```bash
-# Start service
-sudo systemctl start mboxmini
-
-# Stop service
-sudo systemctl stop mboxmini
-
-# Enable at boot
-sudo systemctl enable mboxmini
-```
-
-### Windows
-The service is managed through Windows Service Manager:
-```powershell
-# Start service
-Start-Service MboxMini
-
-# Stop service
-Stop-Service MboxMini
-```
-
-## Detailed Setup Guide
-
-### Development Environment
-
-1. Install Go:
-   - Download from [golang.org](https://golang.org/dl/)
-   - Verify installation: `go version`
-
-2. Install Docker:
-   - Follow instructions at [docs.docker.com](https://docs.docker.com/get-docker/)
-   - Install Docker Compose
-
-3. Configure IDE:
-   - Recommended: VSCode with Go extension
-   - Enable Go modules
-
-### Building the Project
-
-1. Development build:
-```bash
+cd backend
+go mod download
 go run api/main.go
 ```
 
-2. Production build:
+### Frontend Development
 ```bash
-# Linux/macOS
-go build -o bin/server api/main.go
-
-# Windows
-go build -o bin/server.exe api/main.go
+cd frontend
+npm install
+npm start
 ```
 
-### Docker Configuration
+## Docker Commands
 
-The `docker-compose.yml` file configures the Minecraft server:
-```yaml
-version: '3'
-services:
-  minecraft:
-    image: itzg/minecraft-server
-    container_name: minecraft-server
-    environment:
-      EULA: "TRUE"
-      MEMORY: "2G"
-    volumes:
-      - ./minecraft-data:/data
-    ports:
-      - "25565:25565"
+Common operations:
+```bash
+# View logs
+docker-compose logs
+
+# Stop services
+docker-compose down
+
+# Restart services
+docker-compose restart
+
+# Update and rebuild
+docker-compose pull
+docker-compose up -d --build
 ```
 
-### API Documentation
+## API Documentation
 
-All endpoints require the `X-API-Key` header.
+All endpoints require authentication using the API key in the header:
+```
+Authorization: Bearer <YOUR_API_KEY>
+```
 
-1. Server Management:
-   - `POST /api/server/start` - Start server
-   - `POST /api/server/stop` - Stop server
-   - `GET /api/server/status` - Get server status
-   - `POST /api/server/command` - Execute command
-   - `GET /api/server/players` - List online players
-   - `POST /api/server/config` - Update server properties
+Available endpoints:
+- `POST /api/server/start` - Start server
+- `POST /api/server/stop` - Stop server
+- `GET /api/server/status` - Get server status
+- `POST /api/server/command` - Execute command
+- `GET /api/server/players` - List online players
+- `POST /api/server/config` - Update server properties
 
 ## Contributing
 
@@ -145,7 +105,7 @@ All endpoints require the `X-API-Key` header.
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+5. Open a Pull Request at [github.com/mboxmini/mboxmini](https://github.com/mboxmini/mboxmini)
 
 ## License
 
@@ -173,12 +133,12 @@ All contributions to the project are welcome and will be licensed under these sa
 ## Support
 
 For support:
-1. Check the [Issues](https://github.com/your-username/mboxmini/issues) page
+1. Check the [Issues](https://github.com/mboxmini/mboxmini/issues) page
 2. Create a new issue if needed
-3. Visit our website: [mboxmini.com](https://mboxmini.com)
-4. Join our [Discord community](https://discord.gg/mboxmini)
+3. Join our community discussions in [Discussions](https://github.com/mboxmini/mboxmini/discussions)
 
 ## Acknowledgments
 
-- [itzg/minecraft-server](https://github.com/itzg/docker-minecraft-server) for the Docker image
+- [itzg/minecraft-server](https://github.com/itzg/docker-minecraft-server) for the excellent Minecraft server Docker image
 - The Minecraft community
+- All our contributors
