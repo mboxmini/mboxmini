@@ -149,7 +149,26 @@ All endpoints require the `X-API-Key` header.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MboxMini uses a dual-licensing model:
+
+### Personal Use License (Free)
+- Running the server for personal enjoyment
+- Learning and educational purposes
+- Contributing to the project
+- Modifying for personal use
+- Non-commercial use only
+
+### Commercial Use License (Paid)
+A commercial license is required for:
+- Running the server as part of a business operation
+- Generating revenue directly or indirectly using the software
+- Providing services based on the software
+- Using the software in a commercial hosting environment
+
+For commercial licensing inquiries, please contact the project team.
+
+### Terms
+All contributions to the project are welcome and will be licensed under these same terms. See the [LICENSE](LICENSE) file for the complete license text.
 
 ## Support
 
