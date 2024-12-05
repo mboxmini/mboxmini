@@ -1,0 +1,12 @@
+version: '3'
+services:
+  mboxmini:
+    image: itzg/minecraft-server
+    container_name: mboxmini-server
+    environment:
+      EULA: "TRUE"
+      MEMORY: "2G"
+    volumes:
+      - ./minecraft-data:/data
+    ports:
+      - "25565:25565" 
