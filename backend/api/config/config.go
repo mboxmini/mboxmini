@@ -11,31 +11,9 @@ type Config struct {
 
 func NewDefaultConfig() *Config {
 	return &Config{
-		Port: "8080",
-		AllowedCommands: []string{
-			"say",
-			"kick",
-			"op",
-			"deop",
-			"whitelist add",
-			"whitelist remove",
-			"list",
-			"gamerule",
-			"time set",
-			"weather",
-			"gamemode",
-			"difficulty",
-			"save-all",
-			"stop",
-			"tps",
-			"ban",
-			"ban-ip",
-			"pardon",
-			"pardon-ip",
-		},
-		DockerImage:    "itzg/minecraft-server",
-		ContainerName:  "minecraft-server",
+		Port:           "8080",
+		ContainerName:  "mboxmini-server",
+		DockerImage:    "itzg/minecraft-server:latest",
 		DataVolumePath: "./minecraft-data",
-		MaxMemory:      "2G",
 	}
 }

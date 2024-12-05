@@ -1,0 +1,12 @@
+{
+  "name": "mboxmini",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "npm run start --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "test": "npm run test --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "postinstall": "npm install --prefix frontend"
+  }
+} 

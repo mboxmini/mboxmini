@@ -1,12 +1,23 @@
 version: '3'
 services:
-  mboxmini:
+  api:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - API_KEY=${API_KEY}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - ./minecraft-data:/data
+
+  minecraft:
     image: itzg/minecraft-server
     container_name: mboxmini-server
     environment:
       EULA: "TRUE"
-      MEMORY: "2G"
+      MEMORY: "${MAX_MEMORY:-2G}"
     volumes:
       - ./minecraft-data:/data
     ports:
-      - "25565:25565" 
+      - "${MINECRAFT_PORT:-25565}:25565" 

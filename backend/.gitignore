@@ -7,7 +7,7 @@
 # Binary files
 bin/
 *.exe
-backend/server
+server
 
 # Environment files
 .env
@@ -20,24 +20,12 @@ logs/
 
 # Dependencies
 vendor/
-node_modules/
 
 # Minecraft server data
 minecraft-data/
 
-# Build outputs
-frontend/build/
-backend/dist/
-
-# OS specific
+# macOS
 .DS_Store
-Thumbs.db
 
-# Go specific
-*.test
-*.out
-
-# Node specific
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log* 
+# Windows
+Thumbs.db 
