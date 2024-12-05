@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"github.com/docker/docker/api/types"
@@ -36,38 +37,86 @@ func NewManager(containerName, image, dataPath string, maxMemoryMB int) (*Manage
 	}, nil
 }
 
-func (m *Manager) StartContainer() error {
+func (m *Manager) StartContainer(env []string) error {
 	ctx := context.Background()
 
+	log.Printf("Starting container with image: %s", m.image)
+	log.Printf("Environment variables: %v", env)
+
 	// Pull the image
+	log.Printf("Pulling image %s", m.image)
 	reader, err := m.client.ImagePull(ctx, m.image, types.ImagePullOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pull image: %v", err)
 	}
 	io.Copy(io.Discard, reader)
 
-	// Create container if it doesn't exist
+	// Check for existing container
 	containers, err := m.client.ContainerList(ctx, types.ContainerListOptions{All: true})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %v", err)
 	}
 
 	var containerID string
+	var needNewContainer bool = true
+
 	for _, cont := range containers {
 		if cont.Names[0] == "/"+m.containerName {
 			containerID = cont.ID
+			log.Printf("Found existing container with ID: %s", containerID)
+
+			// Check if container has different environment variables
+			inspect, err := m.client.ContainerInspect(ctx, containerID)
+			if err != nil {
+				log.Printf("Error inspecting container: %v", err)
+				needNewContainer = true
+				break
+			}
+
+			// Compare environment variables
+			currentEnv := make(map[string]string)
+			for _, e := range inspect.Config.Env {
+				parts := strings.SplitN(e, "=", 2)
+				if len(parts) == 2 {
+					currentEnv[parts[0]] = parts[1]
+				}
+			}
+
+			// Check if version changed
+			var versionChanged bool
+			for _, e := range env {
+				parts := strings.SplitN(e, "=", 2)
+				if len(parts) == 2 && parts[0] == "VERSION" {
+					if currentValue, exists := currentEnv["VERSION"]; !exists || currentValue != parts[1] {
+						versionChanged = true
+						break
+					}
+				}
+			}
+
+			if versionChanged {
+				log.Printf("Version changed, creating new container")
+				// Stop the container but don't remove it (preserve data)
+				timeout := 30 // seconds
+				err := m.client.ContainerStop(ctx, containerID, container.StopOptions{
+					Timeout: &timeout,
+				})
+				if err != nil {
+					log.Printf("Warning: error stopping container: %v", err)
+				}
+				needNewContainer = true
+			} else {
+				needNewContainer = false
+			}
 			break
 		}
 	}
 
-	if containerID == "" {
-		// Create new container
+	if needNewContainer {
+		log.Printf("Creating new container with name: %s", m.containerName)
 		resp, err := m.client.ContainerCreate(ctx, &container.Config{
 			Image: m.image,
-			Env: []string{
-				"EULA=TRUE",
-				"MEMORY=" + m.maxMemory,
-			},
+			Env:   env,
 		}, &container.HostConfig{
 			Mounts: []mount.Mount{
 				{
@@ -84,12 +133,17 @@ func (m *Manager) StartContainer() error {
 			return fmt.Errorf("failed to create container: %v", err)
 		}
 		containerID = resp.ID
+		log.Printf("Created new container with ID: %s", containerID)
+	} else {
+		log.Printf("Reusing existing container with ID: %s", containerID)
 	}
 
 	// Start the container
+	log.Printf("Starting container %s", containerID)
 	if err := m.client.ContainerStart(ctx, containerID, types.ContainerStartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %v", err)
 	}
+	log.Printf("Successfully started container %s", containerID)
 
 	return nil
 }

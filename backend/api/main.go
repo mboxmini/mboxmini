@@ -44,6 +44,7 @@ func main() {
 	r := mux.NewRouter()
 
 	// Add middleware to all routes
+	r.Use(middleware.CORS)
 	r.Use(middleware.Logging)
 	r.Use(rateLimiter.RateLimit)
 	r.Use(apiKey.Authenticate)

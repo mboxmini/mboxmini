@@ -5,7 +5,10 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o server ./api/main.go
 
 FROM alpine:latest
+RUN apk add --no-cache docker-cli
+
 WORKDIR /app
 COPY --from=builder /app/server .
+
 EXPOSE 8080
 CMD ["./server"] 

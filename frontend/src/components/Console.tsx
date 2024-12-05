@@ -27,16 +27,34 @@ const InputGroup = styled.div`
 `;
 
 const StyledInput = styled(Input)`
-  background: ${colors.background};
+  background: ${colors.surface};
   border: 1px solid ${colors.border};
   color: ${colors.text};
 
   &:hover,
   &:focus {
     border-color: ${colors.accent1};
+    background: ${colors.background};
   }
 
   &::placeholder {
+    color: ${colors.textSecondary};
+  }
+
+  // Override antd's default styles
+  &.ant-input {
+    background: ${colors.surface};
+    color: ${colors.text};
+  }
+
+  &.ant-input:focus,
+  &.ant-input-focused {
+    background: ${colors.background};
+    box-shadow: 0 0 0 2px rgba(255, 51, 102, 0.2);
+  }
+
+  &.ant-input-disabled {
+    background: ${colors.background};
     color: ${colors.textSecondary};
   }
 `;
