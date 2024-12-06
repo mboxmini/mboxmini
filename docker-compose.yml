@@ -1,26 +1,45 @@
 services:
-  api:
-    build: 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    build:
       context: ./backend
       dockerfile: Dockerfile
-    environment:
-      - API_KEY=${API_KEY}
     ports:
-      - "${API_PORT:-8080}:8080"
+      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - minecraft
-
-  minecraft:
-    image: itzg/minecraft-server
-    container_name: mboxmini-server
+      - minecraft_data:/data
     environment:
-      EULA: "TRUE"
-      MEMORY: "${MAX_MEMORY:-2G}"
-      VERSION: "${MINECRAFT_VERSION:-1.21.3}"
-      TYPE: "VANILLA"
-    volumes:
-      - ./minecraft-data:/data
-    ports:
-      - "${MINECRAFT_PORT:-25565}:25565" 
+      - API_KEY=${API_KEY}
+      - DATA_PATH=${HOST_DATA_PATH}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      minecraft-image-pull:
+        condition: service_completed_successfully
+
+  # Service to ensure Minecraft image is pulled
+  minecraft-image-pull:
+    image: itzg/minecraft-server:latest
+    command: echo "Minecraft server image pulled successfully"
+    deploy:
+      replicas: 0
+    pull_policy: always
+
+volumes:
+  minecraft_data:

@@ -1,72 +1,67 @@
 import React, { useEffect, useState } from 'react';
-import { getPlayers } from '../api/server';
-import { Card, List, Typography } from 'antd';
+import { List, Typography } from 'antd';
 import styled from 'styled-components';
-import { colors } from '../theme';
+import { getServerPlayers } from '../api/server';
 
-const { Text } = Typography;
+const { Title } = Typography;
 
-const StyledCard = styled(Card)`
-    background: ${colors.surface};
-    border: 1px solid ${colors.border};
-    border-radius: 16px;
+const PlayerList: React.FC<{ serverId: string }> = ({ serverId }) => {
+  const [players, setPlayers] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
 
-    .ant-card-head {
-        border-bottom: 1px solid ${colors.border};
-    }
-
-    .ant-card-head-title {
-        color: ${colors.text};
-    }
-
-    .ant-list-item {
-        border-bottom: 1px solid ${colors.border};
-    }
-`;
-
-const StyledText = styled(Text)`
-    color: ${colors.text};
-`;
-
-const PlayerList: React.FC = () => {
-    const [players, setPlayers] = useState<string[]>([]);
-    const [loading, setLoading] = useState<boolean>(false);
-
+  useEffect(() => {
     const fetchPlayers = async () => {
-        setLoading(true);
-        try {
-            const response = await getPlayers();
-            setPlayers(response.players);
-        } catch (error) {
-            console.error('Error fetching players:', error);
-            setPlayers([]);
-        } finally {
-            setLoading(false);
-        }
+      setLoading(true);
+      try {
+        const data = await getServerPlayers(serverId);
+        setPlayers(data);
+      } catch (error) {
+        console.error('Error fetching players:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    useEffect(() => {
-        fetchPlayers();
-        const interval = setInterval(fetchPlayers, 5000);
-        return () => clearInterval(interval);
-    }, []);
+    if (serverId) {
+      fetchPlayers();
+      const interval = setInterval(fetchPlayers, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [serverId]);
 
-    return (
-        <StyledCard title="Online Players" loading={loading}>
-            {players.length === 0 ? (
-                <StyledText>No players online</StyledText>
-            ) : (
-                <List
-                    dataSource={players}
-                    renderItem={(player) => (
-                        <List.Item>
-                            <StyledText>{player}</StyledText>
-                        </List.Item>
-                    )}
-                />
-            )}
-        </StyledCard>
-    );
+  const noPlayersMessage = !serverId ? 'No server selected' : 'No players online';
+
+  return (
+    <StyledSidebar>
+      <Title level={4}>Players</Title>
+      {!players || players.length === 0 ? (
+        <StyledNoPlayers>{noPlayersMessage}</StyledNoPlayers>
+      ) : (
+        <List
+          dataSource={players}
+          renderItem={player => <StyledListItem>{player}</StyledListItem>}
+          loading={loading}
+        />
+      )}
+    </StyledSidebar>
+  );
 };
+
+const StyledSidebar = styled.div`
+  background: #fff;
+  padding: 24px;
+  min-width: 250px;
+  border-left: 1px solid #f0f0f0;
+`;
+
+const StyledListItem = styled(List.Item)`
+  padding: 8px 0;
+`;
+
+const StyledNoPlayers = styled.div`
+  color: #999;
+  text-align: center;
+  padding: 16px;
+`;
 
 export default PlayerList;

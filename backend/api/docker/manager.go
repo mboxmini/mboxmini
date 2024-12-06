@@ -5,7 +5,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -15,193 +20,336 @@ import (
 )
 
 type Manager struct {
-	client        *client.Client
-	containerName string
-	image         string
-	dataPath      string
-	maxMemory     string
+	client    *client.Client
+	dataPath  string
+	portStart int
+	portEnd   int
+	mu        sync.Mutex
+	portInUse map[int]string
 }
 
-func NewManager(containerName, image, dataPath string, maxMemoryMB int) (*Manager, error) {
+type ServerInfo struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Status  string   `json:"status"`
+	Version string   `json:"version"`
+	Port    int      `json:"port"`
+	Players []string `json:"players"`
+}
+
+func NewManager(dataPath string, portStart, portEnd int) (*Manager, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %v", err)
 	}
 
-	// Use the provided dataPath directly
-	log.Printf("Initializing Docker manager with data path: %s", dataPath)
-
-	return &Manager{
-		client:        cli,
-		containerName: containerName,
-		image:         image,
-		dataPath:      dataPath,
-		maxMemory:     fmt.Sprintf("%dM", maxMemoryMB),
-	}, nil
-}
-
-func (m *Manager) StartContainer(env []string) error {
-	ctx := context.Background()
-
-	log.Printf("Starting container with parameters:")
-	log.Printf("- Image: %s", m.image)
-	log.Printf("- Container name: %s", m.containerName)
-	log.Printf("- Environment variables: %v", env)
-
-	// Build equivalent docker command for logging
-	dockerCmd := "docker run -d"
-	dockerCmd += fmt.Sprintf(" --name %s", m.containerName)
-	for _, e := range env {
-		dockerCmd += fmt.Sprintf(" -e %q", e)
+	m := &Manager{
+		client:    cli,
+		dataPath:  dataPath,
+		portStart: portStart,
+		portEnd:   portEnd,
+		portInUse: make(map[int]string),
 	}
-	dockerCmd += " -p 25565:25565"
-	dockerCmd += " -v ./minecraft-data:/data"
-	dockerCmd += fmt.Sprintf(" %s", m.image)
 
-	log.Printf("Equivalent Docker command:\n%s", dockerCmd)
-
-	// Pull the image
-	log.Printf("Pulling image %s", m.image)
-	reader, err := m.client.ImagePull(ctx, m.image, types.ImagePullOptions{})
+	// Initialize port tracking by checking existing containers
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
 	if err != nil {
-		return fmt.Errorf("failed to pull image: %v", err)
+		return nil, fmt.Errorf("failed to list containers: %v", err)
 	}
-	io.Copy(io.Discard, reader)
-
-	// Check for existing container
-	containers, err := m.client.ContainerList(ctx, types.ContainerListOptions{All: true})
-	if err != nil {
-		return fmt.Errorf("failed to list containers: %v", err)
-	}
-
-	var containerID string
-	var needNewContainer bool = true
 
 	for _, cont := range containers {
-		if cont.Names[0] == "/"+m.containerName {
-			containerID = cont.ID
-			log.Printf("Found existing container with ID: %s", containerID)
+		if !strings.HasPrefix(cont.Image, "itzg/minecraft-server") {
+			continue
+		}
 
-			// Check if container has different environment variables
-			inspect, err := m.client.ContainerInspect(ctx, containerID)
-			if err != nil {
-				log.Printf("Error inspecting container: %v", err)
-				needNewContainer = true
+		for _, p := range cont.Ports {
+			if p.PrivatePort == 25565 {
+				m.portInUse[int(p.PublicPort)] = strings.TrimPrefix(cont.Names[0], "/")
 				break
 			}
+		}
+	}
 
-			// Compare environment variables
-			currentEnv := make(map[string]string)
-			for _, e := range inspect.Config.Env {
-				parts := strings.SplitN(e, "=", 2)
-				if len(parts) == 2 {
-					currentEnv[parts[0]] = parts[1]
-				}
+	return m, nil
+}
+
+func (m *Manager) findAvailablePort() (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// First try to find a port in the configured range
+	for port := m.portStart; port <= m.portEnd; port++ {
+		// Check if port is in use by our tracking
+		if _, exists := m.portInUse[port]; exists {
+			continue
+		}
+
+		// Check if port is in use by the system
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			continue
+		}
+		listener.Close()
+
+		return port, nil
+	}
+
+	return 0, fmt.Errorf("no available ports in range %d-%d", m.portStart, m.portEnd)
+}
+
+func (m *Manager) CreateServer(name, version, memory string) (string, error) {
+	log.Printf("Starting server creation - Name: %s, Version: %s, Memory: %s", name, version, memory)
+
+	if memory == "" {
+		memory = "2G"
+		log.Printf("Using default memory: %s", memory)
+	}
+
+	port, err := m.findAvailablePort()
+	if err != nil {
+		log.Printf("Error finding available port: %v", err)
+		return "", err
+	}
+	log.Printf("Found available port: %d", port)
+
+	serverID := fmt.Sprintf("mboxmini-%s", name)
+	log.Printf("Generated server ID: %s", serverID)
+
+	// Create server data directory on host using a temporary container
+	serverDataDir := filepath.Join(m.dataPath, serverID)
+	log.Printf("Creating server data directory on host: %s", serverDataDir)
+
+	// Pull alpine image first
+	log.Printf("Pulling alpine image...")
+	reader, err := m.client.ImagePull(context.Background(), "alpine:latest", types.ImagePullOptions{})
+	if err != nil {
+		log.Printf("Error pulling alpine image: %v", err)
+		return "", fmt.Errorf("failed to pull alpine image: %v", err)
+	}
+	io.Copy(io.Discard, reader)
+	reader.Close()
+
+	// Use alpine container to create directory
+	mkdirCmd := fmt.Sprintf("mkdir -p %s", serverDataDir)
+	resp, err := m.client.ContainerCreate(
+		context.Background(),
+		&container.Config{
+			Image: "alpine:latest",
+			Cmd:   []string{"sh", "-c", mkdirCmd},
+		},
+		&container.HostConfig{
+			AutoRemove: true,
+			Mounts: []mount.Mount{
+				{
+					Type:   mount.TypeBind,
+					Source: filepath.Dir(m.dataPath),
+					Target: filepath.Dir(m.dataPath),
+				},
+			},
+		},
+		nil,
+		nil,
+		"",
+	)
+	if err != nil {
+		log.Printf("Error creating directory container: %v", err)
+		return "", fmt.Errorf("failed to create directory container: %v", err)
+	}
+
+	if err := m.client.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
+		log.Printf("Error starting directory container: %v", err)
+		return "", fmt.Errorf("failed to start directory container: %v", err)
+	}
+
+	// Wait for container to finish
+	statusCh, errCh := m.client.ContainerWait(context.Background(), resp.ID, container.WaitConditionNotRunning)
+	select {
+	case err := <-errCh:
+		if err != nil {
+			log.Printf("Error waiting for directory container: %v", err)
+			return "", fmt.Errorf("failed waiting for directory container: %v", err)
+		}
+	case <-statusCh:
+	}
+
+	env := []string{
+		"EULA=TRUE",
+		fmt.Sprintf("VERSION=%s", version),
+		"TYPE=VANILLA",
+		fmt.Sprintf("MEMORY=%s", memory),
+	}
+	log.Printf("Environment variables: %v", env)
+
+	// Create Minecraft server container
+	containerConfig := &container.Config{
+		Image: "itzg/minecraft-server:latest",
+		Env:   env,
+	}
+
+	hostConfig := &container.HostConfig{
+		Mounts: []mount.Mount{
+			{
+				Type:   mount.TypeBind,
+				Source: serverDataDir,
+				Target: "/data",
+			},
+		},
+		PortBindings: nat.PortMap{
+			"25565/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", port)}},
+		},
+	}
+
+	// Create the container
+	_, err = m.client.ContainerCreate(
+		context.Background(),
+		containerConfig,
+		hostConfig,
+		nil,
+		nil,
+		serverID,
+	)
+	if err != nil {
+		log.Printf("Error creating container: %v", err)
+		return "", fmt.Errorf("failed to create container: %v", err)
+	}
+
+	// Start the container
+	log.Printf("Starting container %s", serverID)
+	if err := m.client.ContainerStart(context.Background(), serverID, types.ContainerStartOptions{}); err != nil {
+		log.Printf("Error starting container: %v", err)
+		// Clean up on failure
+		if rmErr := m.client.ContainerRemove(context.Background(), serverID, types.ContainerRemoveOptions{Force: true}); rmErr != nil {
+			log.Printf("Error removing container after failed start: %v", rmErr)
+		}
+		return "", fmt.Errorf("failed to start container: %v", err)
+	}
+
+	m.mu.Lock()
+	m.portInUse[port] = serverID
+	m.mu.Unlock()
+
+	log.Printf("Server created and started successfully with ID: %s", serverID)
+	return serverID, nil
+}
+
+func (m *Manager) ListServers() ([]ServerInfo, error) {
+	containers, err := m.client.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list containers: %v", err)
+	}
+
+	var servers []ServerInfo
+	for _, cont := range containers {
+		// Only include containers that use the Minecraft server image
+		if !strings.HasPrefix(cont.Image, "itzg/minecraft-server") {
+			continue
+		}
+
+		serverID := strings.TrimPrefix(cont.Names[0], "/")
+		inspect, err := m.client.ContainerInspect(context.Background(), cont.ID)
+		if err != nil {
+			log.Printf("Error inspecting container %s: %v", serverID, err)
+			continue
+		}
+
+		// Extract version from environment variables
+		var version string
+		for _, env := range inspect.Config.Env {
+			if strings.HasPrefix(env, "VERSION=") {
+				version = strings.TrimPrefix(env, "VERSION=")
+				break
 			}
+		}
 
-			// Check if version changed
-			var versionChanged bool
-			for _, e := range env {
-				parts := strings.SplitN(e, "=", 2)
-				if len(parts) == 2 && parts[0] == "VERSION" {
-					if currentValue, exists := currentEnv["VERSION"]; !exists || currentValue != parts[1] {
-						versionChanged = true
-						break
-					}
-				}
+		// Get port mapping
+		var port int
+		for _, p := range cont.Ports {
+			if p.PrivatePort == 25565 {
+				port = int(p.PublicPort)
+				break
 			}
+		}
 
-			if versionChanged {
-				log.Printf("Version changed, creating new container")
-				// Stop the container but don't remove it (preserve data)
-				timeout := 30 // seconds
-				err := m.client.ContainerStop(ctx, containerID, container.StopOptions{
-					Timeout: &timeout,
-				})
-				if err != nil {
-					log.Printf("Warning: error stopping container: %v", err)
+		// Get players if server is running
+		var players []string
+		if cont.State == "running" {
+			if playerList, err := m.getPlayers(serverID); err == nil {
+				players = playerList
+			}
+		}
+
+		servers = append(servers, ServerInfo{
+			ID:      serverID,
+			Name:    strings.TrimPrefix(serverID, "mboxmini-"),
+			Status:  cont.State,
+			Version: version,
+			Port:    port,
+			Players: players,
+		})
+	}
+
+	return servers, nil
+}
+
+func (m *Manager) GetServerStatus(serverID string) (*ServerInfo, error) {
+	inspect, err := m.client.ContainerInspect(context.Background(), serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container: %v", err)
+	}
+
+	// Extract version from environment variables
+	var version string
+	for _, env := range inspect.Config.Env {
+		if strings.HasPrefix(env, "VERSION=") {
+			version = strings.TrimPrefix(env, "VERSION=")
+			break
+		}
+	}
+
+	// Get port mapping
+	var port int
+	for p := range inspect.NetworkSettings.Ports {
+		if strings.HasPrefix(string(p), "25565") {
+			bindings := inspect.NetworkSettings.Ports[p]
+			if len(bindings) > 0 {
+				if p, err := nat.ParsePort(bindings[0].HostPort); err == nil {
+					port = int(p)
 				}
-				needNewContainer = true
-			} else {
-				needNewContainer = false
 			}
 			break
 		}
 	}
 
-	if needNewContainer {
-		log.Printf("Creating new container with configuration:")
-		containerConfig := &container.Config{
-			Image: m.image,
-			Env:   env,
+	// Get players if server is running
+	var players []string
+	if inspect.State.Running {
+		if playerList, err := m.getPlayers(serverID); err == nil {
+			players = playerList
 		}
-		hostConfig := &container.HostConfig{
-			Mounts: []mount.Mount{
-				{
-					Type:   mount.TypeBind,
-					Source: m.dataPath, // Use the absolute path from Manager
-					Target: "/data",
-				},
-			},
-			PortBindings: nat.PortMap{
-				"25565/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: "25565"}},
-			},
-		}
-
-		log.Printf("Container config: %+v", containerConfig)
-		log.Printf("Host config: %+v", hostConfig)
-
-		resp, err := m.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, m.containerName)
-		if err != nil {
-			return fmt.Errorf("failed to create container: %v", err)
-		}
-		containerID = resp.ID
-		log.Printf("Created new container with ID: %s", containerID)
-	} else {
-		log.Printf("Reusing existing container with ID: %s", containerID)
 	}
 
-	// Start the container
-	log.Printf("Starting container %s", containerID)
-	if err := m.client.ContainerStart(ctx, containerID, types.ContainerStartOptions{}); err != nil {
-		return fmt.Errorf("failed to start container: %v", err)
-	}
-	log.Printf("Successfully started container %s", containerID)
-
-	return nil
+	return &ServerInfo{
+		ID:      serverID,
+		Name:    strings.TrimPrefix(serverID, "mboxmini-"),
+		Status:  inspect.State.Status,
+		Version: version,
+		Port:    port,
+		Players: players,
+	}, nil
 }
 
-func (m *Manager) StopContainer() error {
-	ctx := context.Background()
-	timeoutSeconds := 30
-
-	if err := m.client.ContainerStop(ctx, m.containerName, container.StopOptions{
-		Timeout: &timeoutSeconds,
-	}); err != nil {
-		return fmt.Errorf("failed to stop container: %v", err)
-	}
-
-	return nil
+func (m *Manager) StartServer(serverID string) error {
+	return m.client.ContainerStart(context.Background(), serverID, types.ContainerStartOptions{})
 }
 
-func (m *Manager) GetContainerStatus() (string, error) {
-	ctx := context.Background()
-
-	containers, err := m.client.ContainerList(ctx, types.ContainerListOptions{All: true})
-	if err != nil {
-		return "", fmt.Errorf("failed to list containers: %v", err)
-	}
-
-	for _, cont := range containers {
-		if cont.Names[0] == "/"+m.containerName {
-			return cont.State, nil
-		}
-	}
-
-	return "not found", nil
+func (m *Manager) StopServer(serverID string) error {
+	timeout := 30 // seconds
+	return m.client.ContainerStop(context.Background(), serverID, container.StopOptions{
+		Timeout: &timeout,
+	})
 }
 
-func (m *Manager) ExecuteCommand(ctx context.Context, cmd string) error {
+func (m *Manager) ExecuteCommand(ctx context.Context, serverID, cmd string) error {
 	execConfig := types.ExecConfig{
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -210,9 +358,9 @@ func (m *Manager) ExecuteCommand(ctx context.Context, cmd string) error {
 		Cmd:          []string{"rcon-cli", cmd},
 	}
 
-	log.Printf("Executing command in container: %v", execConfig.Cmd)
+	log.Printf("Executing command in container %s: %v", serverID, execConfig.Cmd)
 
-	execID, err := m.client.ContainerExecCreate(ctx, m.containerName, execConfig)
+	execID, err := m.client.ContainerExecCreate(ctx, serverID, execConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create exec: %v", err)
 	}
@@ -232,26 +380,24 @@ func (m *Manager) ExecuteCommand(ctx context.Context, cmd string) error {
 	return nil
 }
 
-func (m *Manager) ListPlayers() ([]string, error) {
-	ctx := context.Background()
-
-	// Execute list command using rcon-cli
+func (m *Manager) getPlayers(serverID string) ([]string, error) {
 	execConfig := types.ExecConfig{
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
 		Tty:          true,
-		Cmd:          []string{"rcon-cli", "list"},
+
+		Cmd: []string{"rcon-cli", "list"},
 	}
 
-	log.Printf("Executing list command: %v", execConfig.Cmd)
+	log.Printf("Getting player list for server %s", serverID)
 
-	execID, err := m.client.ContainerExecCreate(ctx, m.containerName, execConfig)
+	execID, err := m.client.ContainerExecCreate(context.Background(), serverID, execConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create exec: %v", err)
 	}
 
-	resp, err := m.client.ContainerExecAttach(ctx, execID.ID, types.ExecStartCheck{})
+	resp, err := m.client.ContainerExecAttach(context.Background(), execID.ID, types.ExecStartCheck{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to attach to exec: %v", err)
 	}
@@ -263,15 +409,13 @@ func (m *Manager) ListPlayers() ([]string, error) {
 	}
 
 	outputStr := string(output)
-	log.Printf("List command output: %s", outputStr)
+	log.Printf("Player list output: %s", outputStr)
 
-	// Parse the output to extract player names
 	if strings.Contains(outputStr, "There are 0") {
 		return []string{}, nil
 	}
 
-	// Extract player names from the output
-	players := []string{}
+	var players []string
 	lines := strings.Split(outputStr, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "players online:") {
@@ -279,12 +423,54 @@ func (m *Manager) ListPlayers() ([]string, error) {
 			if len(parts) == 2 {
 				playerList := strings.TrimSpace(parts[1])
 				if playerList != "" {
-					playerNames := strings.Split(playerList, ", ")
-					players = append(players, playerNames...)
+					players = strings.Split(playerList, ", ")
 				}
 			}
+			break
 		}
 	}
 
 	return players, nil
+}
+
+func (m *Manager) DeleteServer(serverID string) error {
+	// First stop the server if it's running
+	container, err := m.client.ContainerInspect(context.Background(), serverID)
+	if err != nil {
+		return fmt.Errorf("failed to inspect container: %v", err)
+	}
+
+	// Get the port from the container
+	var port int
+	for p := range container.NetworkSettings.Ports {
+		if strings.HasPrefix(string(p), "25565") {
+			bindings := container.NetworkSettings.Ports[p]
+			if len(bindings) > 0 {
+				if p, err := strconv.Atoi(bindings[0].HostPort); err == nil {
+					port = p
+				}
+			}
+			break
+		}
+	}
+
+	// Remove the container with force (stops it if running)
+	if err := m.client.ContainerRemove(context.Background(), serverID, types.ContainerRemoveOptions{
+		Force: true,
+	}); err != nil {
+		return fmt.Errorf("failed to remove container: %v", err)
+	}
+
+	// Remove the server data directory
+	serverDataDir := filepath.Join(m.dataPath, serverID)
+	if err := os.RemoveAll(serverDataDir); err != nil {
+		log.Printf("Warning: failed to remove server data directory: %v", err)
+	}
+
+	// Release the port
+	m.mu.Lock()
+	delete(m.portInUse, port)
+	m.mu.Unlock()
+
+	return nil
 }

@@ -8,32 +8,45 @@ generate_api_key() {
     fi
 }
 
-# Create environment file
-create_env_file() {
-    local env_file="$1"
-    local env_dir=$(dirname "$env_file")
-    
-    # Create directory if it doesn't exist
-    mkdir -p "$env_dir"
-    
-    echo "API_KEY=$API_KEY" > "$env_file"
-    echo "MINECRAFT_PORT=25565" >> "$env_file"
-    echo "API_PORT=8080" >> "$env_file"
-    echo "MAX_MEMORY=2G" >> "$env_file"
-    chmod 600 "$env_file"
-    echo "Created environment file: $env_file"
+# Get absolute path for minecraft-data
+HOST_DATA_PATH="$(pwd)/minecraft-data"
+mkdir -p "$HOST_DATA_PATH"
+
+# Create environment files from template
+create_env_files() {
+    local backend_env="$1"
+    local frontend_env="frontend/.env"
+    local template="scripts/config/template.env"
+
+    # Read template
+    if [ ! -f "$template" ]; then
+        echo "Error: Template file not found at $template"
+        exit 1
+    fi
+
+    # Create backend environment file
+    echo "Creating backend environment file: $backend_env"
+    sed -e "s|{{API_KEY}}|$API_KEY|g" \
+        -e "s|{{HOST_DATA_PATH}}|$HOST_DATA_PATH|g" \
+        -e "s|{{API_PORT}}|8080|g" \
+        -e "s|{{MINECRAFT_PORT}}|25565|g" \
+        "$template" > "$backend_env"
+    chmod 600 "$backend_env"
+
+    # Create frontend environment file
+    echo "Creating frontend environment file: $frontend_env"
+    grep "^REACT_APP_" "$template" | \
+    sed -e "s|{{API_KEY}}|$API_KEY|g" \
+        -e "s|{{API_PORT}}|8080|g" \
+        -e "s|{{MINECRAFT_PORT}}|25565|g" \
+        > "$frontend_env"
+    chmod 600 "$frontend_env"
 }
 
 # Initialize frontend
 init_frontend() {
     echo "Initializing frontend..."
     mkdir -p frontend/public frontend/src
-    
-    # Create basic React files if they don't exist
-    if [ ! -f frontend/src/index.tsx ]; then
-        echo "Creating frontend source files..."
-        # Add your frontend initialization here
-    fi
 }
 
 # Setup development environment
@@ -69,15 +82,15 @@ setup_dev
 case "$OSTYPE" in
     darwin*)  
         echo "Detected macOS"
-        create_env_file "./scripts/config/mac.env" 
+        create_env_files "./scripts/config/mac.env"
         ;;
     linux*)   
         echo "Detected Linux"
-        create_env_file "./scripts/config/linux.env" 
+        create_env_files "./scripts/config/linux.env"
         ;;
     msys*|cygwin*|mingw*)  
         echo "Detected Windows"
-        create_env_file "./scripts/config/windows.env" 
+        create_env_files "./scripts/config/windows.env"
         ;;
     *) 
         echo "Unknown platform: $OSTYPE" 

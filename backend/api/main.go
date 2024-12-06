@@ -26,31 +26,45 @@ func main() {
 	rateLimiter := middleware.NewRateLimiter()
 	apiKey := &middleware.APIKey{Key: apiKeyValue}
 
-	// Initialize Docker manager
-	dockerManager, err := docker.NewManager(
-		cfg.ContainerName,
-		cfg.DockerImage,
-		cfg.DataVolumePath,
-		1024,
-	)
+	// Initialize Docker manager with a wider port range
+	dataPath := os.Getenv("DATA_PATH")
+	manager, err := docker.NewManager(dataPath, 25565, 25665)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Initialize handlers
-	serverHandler := handlers.NewServerHandler(dockerManager)
+	serverHandler := handlers.NewServerHandler(manager)
 
 	// Initialize router
 	r := mux.NewRouter()
 
-	// Add middleware to all routes
+	// Apply CORS middleware to the root router
 	r.Use(middleware.CORS)
-	r.Use(middleware.Logging)
-	r.Use(rateLimiter.RateLimit)
-	r.Use(apiKey.Authenticate)
+
+	// Add health check endpoint (no auth required)
+	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	}).Methods("GET", "OPTIONS")
+
+	// Add middleware to API routes
+	api := r.PathPrefix("/api").Subrouter()
+	api.Use(middleware.Logging)
+	api.Use(rateLimiter.RateLimit)
+	api.Use(apiKey.Authenticate)
 
 	// Register routes
-	serverHandler.RegisterRoutes(r)
+	serverHandler.RegisterRoutes(api)
+
+	// Add OPTIONS handler for all routes
+	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
 
 	// Start server
 	log.Printf("Starting server on :%s", cfg.Port)

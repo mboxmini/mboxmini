@@ -59,11 +59,20 @@ const StyledInput = styled(Input)`
   }
 `;
 
-const Console: React.FC = () => {
+interface Props {
+  serverId?: string;
+}
+
+const Console: React.FC<Props> = ({ serverId }) => {
   const [command, setCommand] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleExecute = async () => {
+    if (!serverId) {
+      message.warning('No server selected');
+      return;
+    }
+
     if (!command.trim()) {
       message.warning('Please enter a command');
       return;
@@ -71,7 +80,7 @@ const Console: React.FC = () => {
 
     setLoading(true);
     try {
-      await executeCommand(command);
+      await executeCommand(serverId, command);
       message.success('Command executed successfully');
       setCommand('');
     } catch (error) {
