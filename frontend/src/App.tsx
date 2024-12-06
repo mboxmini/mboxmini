@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Layout, ConfigProvider, theme, Button, Space } from 'antd';
+import { Layout, ConfigProvider, theme, Button, Space, message } from 'antd';
 import styled from 'styled-components';
 import { colors } from './theme';
 import ServerControl from './components/ServerControl';
 import Console from './components/Console';
 import PlayerList from './components/PlayerList';
 import ServerList from './components/ServerList';
-import { Server, listServers } from './api/server';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Server, listServers, debouncedListServers } from './api/server';
+import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
 
 const { Content, Header } = Layout;
 
@@ -42,32 +42,52 @@ const MainSection = styled.div`
   gap: 24px;
 `;
 
+const CreateButtonContainer = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+
+  .ant-btn {
+    background: ${colors.accent2};
+    border-color: ${colors.accent2};
+
+    &:hover {
+      background: ${colors.accent1};
+      border-color: ${colors.accent1};
+    }
+  }
+`;
+
 const App: React.FC = () => {
   const [servers, setServers] = useState<Server[]>([]);
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const fetchServers = async () => {
     setLoading(true);
     try {
-      const serverList = await listServers();
+      const serverList = await debouncedListServers();
       setServers(serverList);
     } catch (error) {
       console.error('Error fetching servers:', error);
+      message.error('Failed to fetch servers');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchServers();
-    const interval = setInterval(fetchServers, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!selectedServer) {
+      fetchServers();
+      const interval = setInterval(fetchServers, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedServer]);
 
   const handleServerCreated = (serverId: string) => {
-    fetchServers();
     setSelectedServer(serverId);
+    setShowCreateForm(false);
   };
 
   const handleOpenServer = (serverId: string) => {
@@ -76,6 +96,11 @@ const App: React.FC = () => {
 
   const handleBackToList = () => {
     setSelectedServer(null);
+  };
+
+  const handleServerDeleted = () => {
+    setSelectedServer(null);
+    fetchServers();
   };
 
   return (
@@ -98,23 +123,45 @@ const App: React.FC = () => {
         </StyledHeader>
         <StyledContent>
           {selectedServer ? (
-            <>
-              <MainSection>
-                <ServerControl serverId={selectedServer} onServerCreated={handleServerCreated} />
-                <Console serverId={selectedServer} />
-              </MainSection>
+            <MainSection>
+              <ServerControl
+                key={selectedServer}
+                serverId={selectedServer}
+                onServerCreated={handleServerCreated}
+                onServerDeleted={handleServerDeleted}
+              />
+              <Console serverId={selectedServer} />
               <PlayerList serverId={selectedServer} />
-            </>
+            </MainSection>
           ) : (
             <MainSection>
-              <Space direction="vertical" style={{ width: '100%' }} size="large">
-                <ServerControl onServerCreated={handleServerCreated} />
-                <ServerList
-                  servers={servers}
-                  onRefresh={fetchServers}
-                  onOpenServer={handleOpenServer}
-                />
-              </Space>
+              {showCreateForm ? (
+                <div>
+                  <Space style={{ marginBottom: 16 }}>
+                    <Button icon={<ArrowLeftOutlined />} onClick={() => setShowCreateForm(false)}>
+                      Back to List
+                    </Button>
+                  </Space>
+                  <ServerControl onServerCreated={handleServerCreated} />
+                </div>
+              ) : (
+                <>
+                  <CreateButtonContainer>
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => setShowCreateForm(true)}
+                    >
+                      Create Minecraft Server
+                    </Button>
+                  </CreateButtonContainer>
+                  <ServerList
+                    servers={servers}
+                    loading={loading}
+                    onServerClick={handleOpenServer}
+                  />
+                </>
+              )}
             </MainSection>
           )}
         </StyledContent>

@@ -23,16 +23,16 @@ const getStatusColor = (status: string): string => {
 
 interface Props {
   servers: Server[];
-  onRefresh: () => void;
-  onOpenServer: (serverId: string) => void;
+  loading?: boolean;
+  onServerClick: (serverId: string) => void;
 }
 
-const ServerList: React.FC<Props> = ({ servers, onRefresh, onOpenServer }) => {
+const ServerList: React.FC<Props> = ({ servers, loading = false, onServerClick }) => {
   const handleStartServer = async (serverId: string) => {
     try {
       await startServer(serverId);
       message.success('Server starting');
-      onRefresh();
+      onServerClick(serverId);
     } catch (error) {
       console.error('Error starting server:', error);
       message.error('Failed to start server');
@@ -43,7 +43,7 @@ const ServerList: React.FC<Props> = ({ servers, onRefresh, onOpenServer }) => {
     try {
       await stopServer(serverId);
       message.success('Server stopping');
-      onRefresh();
+      onServerClick(serverId);
     } catch (error) {
       console.error('Error stopping server:', error);
       message.error('Failed to stop server');
@@ -54,7 +54,7 @@ const ServerList: React.FC<Props> = ({ servers, onRefresh, onOpenServer }) => {
     try {
       await deleteServer(serverId);
       message.success('Server deleted');
-      onRefresh();
+      onServerClick(serverId);
     } catch (error) {
       console.error('Error deleting server:', error);
       message.error('Failed to delete server');
@@ -119,7 +119,7 @@ const ServerList: React.FC<Props> = ({ servers, onRefresh, onOpenServer }) => {
           >
             <Button type="text" danger icon={<DeleteOutlined />} title="Delete Server" />
           </Popconfirm>
-          <Button type="link" onClick={() => onOpenServer(record.id)}>
+          <Button type="link" onClick={() => onServerClick(record.id)}>
             Details
           </Button>
         </Space>
@@ -136,6 +136,7 @@ const ServerList: React.FC<Props> = ({ servers, onRefresh, onOpenServer }) => {
       locale={{
         emptyText: 'No servers found. Create one to get started!',
       }}
+      loading={loading}
     />
   );
 };
