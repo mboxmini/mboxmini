@@ -122,3 +122,16 @@ export const executeCommand = async (serverId: string, command: string): Promise
     return false;
   }
 };
+
+export const deleteServer = async (serverId: string): Promise<boolean> => {
+  try {
+    await fetch(`${API_CONFIG.API_URL}/api/servers/${serverId}`, {
+      method: 'DELETE',
+      headers: API_HEADERS,
+    });
+    return true;
+  } catch (error) {
+    console.error('Error deleting server:', error);
+    return false;
+  }
+};

@@ -41,6 +41,7 @@ func (h *ServerHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/servers", h.ListServers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/servers", h.CreateServer).Methods("POST", "OPTIONS")
 	r.HandleFunc("/servers/{id}", h.GetServerStatus).Methods("GET", "OPTIONS")
+	r.HandleFunc("/servers/{id}", h.DeleteServer).Methods("DELETE", "OPTIONS")
 	r.HandleFunc("/servers/{id}/start", h.StartServer).Methods("POST", "OPTIONS")
 	r.HandleFunc("/servers/{id}/stop", h.StopServer).Methods("POST", "OPTIONS")
 	r.HandleFunc("/servers/{id}/command", h.ExecuteCommand).Methods("POST", "OPTIONS")
@@ -149,4 +150,19 @@ func (h *ServerHandler) ExecuteCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{"status": "command executed"})
+}
+
+func (h *ServerHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
+	serverID := mux.Vars(r)["id"]
+	if serverID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.dockerManager.DeleteServer(serverID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }

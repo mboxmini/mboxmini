@@ -6,7 +6,9 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -429,4 +431,46 @@ func (m *Manager) getPlayers(serverID string) ([]string, error) {
 	}
 
 	return players, nil
+}
+
+func (m *Manager) DeleteServer(serverID string) error {
+	// First stop the server if it's running
+	container, err := m.client.ContainerInspect(context.Background(), serverID)
+	if err != nil {
+		return fmt.Errorf("failed to inspect container: %v", err)
+	}
+
+	// Get the port from the container
+	var port int
+	for p := range container.NetworkSettings.Ports {
+		if strings.HasPrefix(string(p), "25565") {
+			bindings := container.NetworkSettings.Ports[p]
+			if len(bindings) > 0 {
+				if p, err := strconv.Atoi(bindings[0].HostPort); err == nil {
+					port = p
+				}
+			}
+			break
+		}
+	}
+
+	// Remove the container with force (stops it if running)
+	if err := m.client.ContainerRemove(context.Background(), serverID, types.ContainerRemoveOptions{
+		Force: true,
+	}); err != nil {
+		return fmt.Errorf("failed to remove container: %v", err)
+	}
+
+	// Remove the server data directory
+	serverDataDir := filepath.Join(m.dataPath, serverID)
+	if err := os.RemoveAll(serverDataDir); err != nil {
+		log.Printf("Warning: failed to remove server data directory: %v", err)
+	}
+
+	// Release the port
+	m.mu.Lock()
+	delete(m.portInUse, port)
+	m.mu.Unlock()
+
+	return nil
 }
