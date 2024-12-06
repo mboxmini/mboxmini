@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -14,6 +13,24 @@ type ServerHandler struct {
 	dockerManager *docker.Manager
 }
 
+type CreateServerRequest struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Memory  string `json:"memory,omitempty"`
+}
+
+type ServerResponse struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Status  string   `json:"status"`
+	Version string   `json:"version"`
+	Players []string `json:"players"`
+}
+
+type CommandRequest struct {
+	Command string `json:"command"`
+}
+
 func NewServerHandler(dm *docker.Manager) *ServerHandler {
 	return &ServerHandler{
 		dockerManager: dm,
@@ -21,94 +38,117 @@ func NewServerHandler(dm *docker.Manager) *ServerHandler {
 }
 
 func (h *ServerHandler) RegisterRoutes(r *mux.Router) {
-	// Create a subrouter for /api/server endpoints
-	api := r.PathPrefix("/api/server").Subrouter()
+	api := r.PathPrefix("/api/servers").Subrouter()
 
-	// Register routes with OPTIONS method
-	api.HandleFunc("/start", h.StartServer).Methods("POST", "OPTIONS")
-	api.HandleFunc("/stop", h.StopServer).Methods("POST", "OPTIONS")
-	api.HandleFunc("/status", h.GetStatus).Methods("GET", "OPTIONS")
-	api.HandleFunc("/command", h.ExecuteCommand).Methods("POST", "OPTIONS")
-	api.HandleFunc("/players", h.ListPlayers).Methods("GET", "OPTIONS")
+	api.HandleFunc("", h.ListServers).Methods("GET", "OPTIONS")
+	api.HandleFunc("", h.CreateServer).Methods("POST", "OPTIONS")
+	api.HandleFunc("/{id}", h.GetServerStatus).Methods("GET", "OPTIONS")
+	api.HandleFunc("/{id}/start", h.StartServer).Methods("POST", "OPTIONS")
+	api.HandleFunc("/{id}/stop", h.StopServer).Methods("POST", "OPTIONS")
+	api.HandleFunc("/{id}/command", h.ExecuteCommand).Methods("POST", "OPTIONS")
 }
 
-func (h *ServerHandler) StartServer(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Version string `json:"version"`
+func (h *ServerHandler) ListServers(w http.ResponseWriter, r *http.Request) {
+	servers, err := h.dockerManager.ListServers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+
+	json.NewEncoder(w).Encode(servers)
+}
+
+func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received create server request")
+
+	var req CreateServerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("Error decoding request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	log.Printf("Decoded request: %+v", req)
 
-	log.Printf("Received request to start server with version: %s", req.Version)
-
-	// Set environment variables for the container
-	env := []string{
-		"EULA=TRUE",
-		fmt.Sprintf("VERSION=%s", req.Version),
-		"TYPE=VANILLA",
-		"MEMORY=2G",
-	}
-
-	log.Printf("Starting server with environment variables: %v", env)
-
-	// Stop any existing container first
-	if err := h.dockerManager.StopContainer(); err != nil {
-		log.Printf("Warning: error stopping existing container: %v", err)
-	}
-
-	// Start new container with the specified version
-	if err := h.dockerManager.StartContainer(env); err != nil {
-		log.Printf("Error starting container: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if req.Name == "" || req.Version == "" {
+		log.Printf("Invalid request: name or version is empty")
+		http.Error(w, "Name and version are required", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("Successfully started server with version %s", req.Version)
-	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
-}
-
-func (h *ServerHandler) StopServer(w http.ResponseWriter, r *http.Request) {
-	if err := h.dockerManager.StopContainer(); err != nil {
+	serverID, err := h.dockerManager.CreateServer(req.Name, req.Version, req.Memory)
+	if err != nil {
+		log.Printf("Error creating server: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"status": "stopped"})
+	log.Printf("Server created successfully with ID: %s", serverID)
+
+	json.NewEncoder(w).Encode(map[string]string{"id": serverID})
 }
 
-func (h *ServerHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
-	status, err := h.dockerManager.GetContainerStatus()
+func (h *ServerHandler) GetServerStatus(w http.ResponseWriter, r *http.Request) {
+	serverID := mux.Vars(r)["id"]
+	if serverID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	status, err := h.dockerManager.GetServerStatus(serverID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"status": status})
+
+	json.NewEncoder(w).Encode(status)
 }
 
-func (h *ServerHandler) ExecuteCommand(w http.ResponseWriter, r *http.Request) {
-	var cmd struct {
-		Command string `json:"command"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+func (h *ServerHandler) StartServer(w http.ResponseWriter, r *http.Request) {
+	serverID := mux.Vars(r)["id"]
+	if serverID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.dockerManager.ExecuteCommand(r.Context(), cmd.Command); err != nil {
+	if err := h.dockerManager.StartServer(serverID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+func (h *ServerHandler) StopServer(w http.ResponseWriter, r *http.Request) {
+	serverID := mux.Vars(r)["id"]
+	if serverID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.dockerManager.StopServer(serverID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "stopped"})
+}
+
+func (h *ServerHandler) ExecuteCommand(w http.ResponseWriter, r *http.Request) {
+	serverID := mux.Vars(r)["id"]
+	if serverID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var cmd CommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.dockerManager.ExecuteCommand(r.Context(), serverID, cmd.Command); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{"status": "command executed"})
-}
-
-func (h *ServerHandler) ListPlayers(w http.ResponseWriter, r *http.Request) {
-	players, err := h.dockerManager.ListPlayers()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	json.NewEncoder(w).Encode(map[string]interface{}{"players": players})
 }

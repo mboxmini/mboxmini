@@ -1,12 +1,15 @@
-import React from 'react';
-import { ConfigProvider, Layout } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Layout, ConfigProvider, theme, Button, Space } from 'antd';
 import styled from 'styled-components';
-import { theme, colors } from './theme';
+import { colors } from './theme';
 import ServerControl from './components/ServerControl';
-import PlayerList from './components/PlayerList';
 import Console from './components/Console';
+import PlayerList from './components/PlayerList';
+import ServerList from './components/ServerList';
+import { Server, listServers } from './api/server';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 
-const { Header, Content } = Layout;
+const { Content, Header } = Layout;
 
 const StyledLayout = styled(Layout)`
   min-height: 100vh;
@@ -15,51 +18,105 @@ const StyledLayout = styled(Layout)`
 
 const StyledHeader = styled(Header)`
   background: ${colors.surface};
+  border-bottom: 1px solid ${colors.border};
   padding: 0 24px;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid ${colors.border};
-`;
-
-const Logo = styled.div`
-  color: ${colors.text};
-  font-size: 24px;
-  font-weight: bold;
-  background: ${colors.gradient};
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  gap: 16px;
 `;
 
 const StyledContent = styled(Content)`
   padding: 24px;
-  display: grid;
-  grid-template-columns: 1fr 300px;
+  display: flex;
   gap: 24px;
 
-  @media (max-width: ${({ theme }) => theme.breakpoints?.md}) {
-    grid-template-columns: 1fr;
+  @media (max-width: 768px) {
+    flex-direction: column;
   }
 `;
 
 const MainSection = styled.div`
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 24px;
 `;
 
 const App: React.FC = () => {
+  const [servers, setServers] = useState<Server[]>([]);
+  const [selectedServer, setSelectedServer] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchServers = async () => {
+    setLoading(true);
+    try {
+      const serverList = await listServers();
+      setServers(serverList);
+    } catch (error) {
+      console.error('Error fetching servers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchServers();
+    const interval = setInterval(fetchServers, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleServerCreated = (serverId: string) => {
+    fetchServers();
+    setSelectedServer(serverId);
+  };
+
+  const handleOpenServer = (serverId: string) => {
+    setSelectedServer(serverId);
+  };
+
+  const handleBackToList = () => {
+    setSelectedServer(null);
+  };
+
   return (
-    <ConfigProvider theme={theme}>
+    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
       <StyledLayout>
         <StyledHeader>
-          <Logo>MboxMini</Logo>
+          {selectedServer ? (
+            <>
+              <Button
+                icon={<ArrowLeftOutlined />}
+                onClick={handleBackToList}
+                type="text"
+                style={{ color: colors.text }}
+              />
+              <h1 style={{ color: colors.text, margin: 0 }}>Server Details</h1>
+            </>
+          ) : (
+            <h1 style={{ color: colors.text, margin: 0 }}>MBoxMini</h1>
+          )}
         </StyledHeader>
         <StyledContent>
-          <MainSection>
-            <ServerControl />
-            <Console />
-          </MainSection>
-          <PlayerList />
+          {selectedServer ? (
+            <>
+              <MainSection>
+                <ServerControl serverId={selectedServer} onServerCreated={handleServerCreated} />
+                <Console serverId={selectedServer} />
+              </MainSection>
+              <PlayerList serverId={selectedServer} />
+            </>
+          ) : (
+            <MainSection>
+              <Space direction="vertical" style={{ width: '100%' }} size="large">
+                <ServerControl onServerCreated={handleServerCreated} />
+                <ServerList
+                  servers={servers}
+                  onRefresh={fetchServers}
+                  onOpenServer={handleOpenServer}
+                />
+              </Space>
+            </MainSection>
+          )}
         </StyledContent>
       </StyledLayout>
     </ConfigProvider>
