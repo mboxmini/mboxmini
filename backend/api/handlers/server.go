@@ -31,6 +31,10 @@ type CommandRequest struct {
 	Command string `json:"command"`
 }
 
+type DeleteServerRequest struct {
+	RemoveFiles bool `json:"remove_files"`
+}
+
 func NewServerHandler(dm *docker.Manager) *ServerHandler {
 	return &ServerHandler{
 		dockerManager: dm,
@@ -159,7 +163,13 @@ func (h *ServerHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.dockerManager.DeleteServer(serverID); err != nil {
+	var req DeleteServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// If no body is provided, default to not removing files
+		req.RemoveFiles = false
+	}
+
+	if err := h.dockerManager.DeleteServer(serverID, req.RemoveFiles); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
