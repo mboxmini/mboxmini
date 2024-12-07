@@ -88,7 +88,7 @@ npm start
 Common operations:
 ```bash
 # View logs
-docker-compose logs
+docker-compose logs -f
 
 # Stop services
 docker-compose down
