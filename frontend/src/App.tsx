@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Layout, ConfigProvider, theme, Button, Space, message, Modal } from 'antd';
+import { Layout, ConfigProvider, theme, Button, Space, message, Modal, Typography } from 'antd';
 import styled from 'styled-components';
 import { colors } from './theme';
 import ServerControl from './components/ServerControl';
@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 
 const { Content, Header } = Layout;
+const { Title } = Typography;
 
 const StyledLayout = styled(Layout)`
   min-height: 100vh;
@@ -106,6 +107,13 @@ const CreateButtonContainer = styled.div`
   }
 `;
 
+const ListHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+`;
+
 const App: React.FC = () => {
   const [servers, setServers] = useState<Server[]>([]);
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
@@ -163,24 +171,25 @@ const App: React.FC = () => {
     <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
       <StyledLayout>
         <StyledHeader>
-          {selectedServer ? (
-            <>
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={handleBackToList}
-                type="text"
-                style={{ color: colors.text }}
-              />
-              <h1 style={{ color: colors.text, margin: 0 }}>Server Details</h1>
-            </>
-          ) : (
-            <h1 style={{ color: colors.text, margin: 0 }}>MBoxMini</h1>
-          )}
+          <h1 style={{ color: colors.text, margin: 0 }}>MBoxMini</h1>
         </StyledHeader>
         <StyledContent>
           {selectedServer ? (
             <>
               <MainSection>
+                <ListHeader>
+                  <Space>
+                    <Button
+                      icon={<ArrowLeftOutlined />}
+                      onClick={handleBackToList}
+                      type="text"
+                      style={{ color: colors.text }}
+                    />
+                    <Title level={2} style={{ color: colors.text, margin: 0 }}>
+                      Server Details
+                    </Title>
+                  </Space>
+                </ListHeader>
                 <ServerControl
                   key={selectedServer}
                   serverId={selectedServer}
@@ -197,16 +206,27 @@ const App: React.FC = () => {
             <MainSection>
               {showCreateForm ? (
                 <div>
-                  <Space style={{ marginBottom: 16 }}>
-                    <Button icon={<ArrowLeftOutlined />} onClick={() => setShowCreateForm(false)}>
-                      Back to List
-                    </Button>
-                  </Space>
+                  <ListHeader>
+                    <Space>
+                      <Button
+                        icon={<ArrowLeftOutlined />}
+                        onClick={() => setShowCreateForm(false)}
+                        type="text"
+                        style={{ color: colors.text }}
+                      />
+                      <Title level={2} style={{ color: colors.text, margin: 0 }}>
+                        Create Server
+                      </Title>
+                    </Space>
+                  </ListHeader>
                   <ServerControl onServerCreated={handleServerCreated} />
                 </div>
               ) : (
                 <>
-                  <CreateButtonContainer>
+                  <ListHeader>
+                    <Title level={2} style={{ color: colors.text, margin: 0 }}>
+                      Available Servers
+                    </Title>
                     <Button
                       type="primary"
                       icon={<PlusOutlined />}
@@ -214,7 +234,7 @@ const App: React.FC = () => {
                     >
                       Create Minecraft Server
                     </Button>
-                  </CreateButtonContainer>
+                  </ListHeader>
                   <ServerList
                     servers={servers}
                     loading={loading || initialLoading}

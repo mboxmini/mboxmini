@@ -177,6 +177,27 @@ const ServerControl: React.FC<Props> = ({ serverId, onServerCreated, onServerDel
   const [form] = Form.useForm<ServerFormData>();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  useEffect(() => {
+    if (!serverId) {
+      // Generate default name for new server
+      const timestamp = new Date().toISOString().slice(11, 19).replace(/:/g, '-');
+      const defaultName = `minecraft-${timestamp}`;
+      form.setFieldsValue({
+        name: defaultName,
+        version: LATEST_NUMERIC_VERSION,
+        memory: '2G',
+      });
+
+      // Select the name field after a short delay to ensure the input is rendered
+      setTimeout(() => {
+        const input = document.querySelector('input[id="name"]') as HTMLInputElement;
+        if (input) {
+          input.select();
+        }
+      }, 100);
+    }
+  }, [form, serverId]);
+
   const handleVersionChange: SelectProps['onChange'] = value => {
     setCustomVersion(value === 'custom');
     if (value === 'custom') {
