@@ -207,11 +207,15 @@ export const executeCommand = async (serverId: string, command: string): Promise
   }
 };
 
-export const deleteServer = async (serverId: string): Promise<boolean> => {
+export const deleteServer = async (serverId: string, removeFiles = false): Promise<boolean> => {
   try {
     await fetch(`${API_CONFIG.API_URL}/api/servers/${serverId}`, {
       method: 'DELETE',
-      headers: API_HEADERS,
+      headers: {
+        ...API_HEADERS,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ remove_files: removeFiles }),
     });
     return true;
   } catch (error) {

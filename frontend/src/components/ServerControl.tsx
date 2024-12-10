@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, message, Select, Space, Popconfirm, Typography } from 'antd';
+import { Form, Input, Button, message, Select, Space, Typography } from 'antd';
 import type { SelectProps } from 'antd';
 import styled from 'styled-components';
 import {
@@ -21,6 +21,7 @@ import {
   SaveOutlined,
   CloseOutlined,
 } from '@ant-design/icons';
+import DeleteServerModal from './DeleteServerModal';
 
 const { Text } = Typography;
 
@@ -155,15 +156,15 @@ const StyledSelect = styled(Select)`
 const getStatusColor = (status: string): string => {
   switch (status.toLowerCase()) {
     case 'running':
-      return colors.accent2; // green
+      return 'green';
     case 'stopped':
-      return colors.accent1; // red
+      return 'red';
     case 'starting':
-      return colors.accent3; // blue
+      return 'orange';
     case 'stopping':
-      return colors.accent3; // blue
+      return 'orange';
     default:
-      return colors.textSecondary;
+      return 'default';
   }
 };
 
@@ -174,6 +175,7 @@ const ServerControl: React.FC<Props> = ({ serverId, onServerCreated, onServerDel
   const [serverDetails, setServerDetails] = useState<Server | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [form] = Form.useForm<ServerFormData>();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const handleVersionChange: SelectProps['onChange'] = value => {
     setCustomVersion(value === 'custom');
@@ -338,78 +340,85 @@ const ServerControl: React.FC<Props> = ({ serverId, onServerCreated, onServerDel
 
   return (
     <StyledCard>
-      {serverId && serverDetails && (
-        <ServerControls>
-          <ServerInfo>
-            <InfoItem>
-              <span className="label">Name:</span>
-              <span className="value">{serverDetails.name}</span>
-            </InfoItem>
-            <InfoItem>
-              <span className="label">Status:</span>
-              <span className="value">
-                <Tag color={getStatusColor(serverDetails.status)}>
-                  {serverDetails.status.toUpperCase()}
-                </Tag>
-              </span>
-            </InfoItem>
-            <InfoItem>
-              <span className="label">Version:</span>
-              <span className="value">{serverDetails.version}</span>
-            </InfoItem>
-            <InfoItem>
-              <span className="label">Address:</span>
-              <span className="value">
-                localhost:{serverDetails.port}
-                <Button
-                  type="text"
-                  icon={<CopyOutlined />}
-                  onClick={copyAddress}
-                  title="Copy server address"
-                />
-              </span>
-            </InfoItem>
-          </ServerInfo>
-          <ActionButtons>
-            <Button
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              onClick={handleStartServer}
-              disabled={serverDetails.status === 'running' || serverDetails.status === 'starting'}
-            >
-              Start
-            </Button>
-            <Button
-              icon={<PauseCircleOutlined />}
-              onClick={handleStopServer}
-              disabled={serverDetails.status === 'stopped' || serverDetails.status === 'stopping'}
-            >
-              Stop
-            </Button>
-            <Button
-              icon={<EditOutlined />}
-              onClick={handleEdit}
-              disabled={serverDetails.status === 'running' || serverDetails.status === 'starting'}
-            >
-              Edit
-            </Button>
-            <Popconfirm
-              title="Delete Server"
-              description="Are you sure you want to delete this server? This action cannot be undone."
-              onConfirm={handleDeleteServer}
-              okText="Yes"
-              cancelText="No"
-              okButtonProps={{ danger: true }}
-            >
-              <Button danger icon={<DeleteOutlined />}>
-                Delete
-              </Button>
-            </Popconfirm>
-          </ActionButtons>
-        </ServerControls>
-      )}
-
-      {(!serverId || isEditing) && (
+      {serverId ? (
+        <>
+          <ServerControls>
+            <ServerInfo>
+              <InfoItem>
+                <span className="label">Name:</span>
+                <span className="value">{serverDetails?.name}</span>
+              </InfoItem>
+              <InfoItem>
+                <span className="label">Status:</span>
+                <span className="value">
+                  {serverDetails && (
+                    <Tag color={getStatusColor(serverDetails.status)}>
+                      {serverDetails.status.toUpperCase()}
+                    </Tag>
+                  )}
+                </span>
+              </InfoItem>
+              <InfoItem>
+                <span className="label">Version:</span>
+                <span className="value">{serverDetails?.version}</span>
+              </InfoItem>
+              <InfoItem>
+                <span className="label">Address:</span>
+                <span className="value">
+                  {serverDetails && `localhost:${serverDetails.port}`}
+                  <Button
+                    type="text"
+                    icon={<CopyOutlined />}
+                    onClick={() => {
+                      if (serverDetails) {
+                        navigator.clipboard.writeText(`localhost:${serverDetails.port}`);
+                        message.success('Address copied to clipboard');
+                      }
+                    }}
+                    title="Copy Address"
+                  />
+                </span>
+              </InfoItem>
+            </ServerInfo>
+            <ActionButtons>
+              <Button
+                type="text"
+                icon={<PlayCircleOutlined />}
+                onClick={handleStartServer}
+                disabled={
+                  serverDetails?.status === 'running' || serverDetails?.status === 'starting'
+                }
+                title="Start Server"
+              />
+              <Button
+                type="text"
+                icon={<PauseCircleOutlined />}
+                onClick={handleStopServer}
+                disabled={
+                  serverDetails?.status === 'stopped' || serverDetails?.status === 'stopping'
+                }
+                title="Stop Server"
+              />
+              <Button
+                type="text"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => setShowDeleteModal(true)}
+                title="Delete Server"
+              />
+            </ActionButtons>
+          </ServerControls>
+          <DeleteServerModal
+            serverId={showDeleteModal ? serverId : null}
+            onClose={() => setShowDeleteModal(false)}
+            onDeleted={() => {
+              if (onServerDeleted) {
+                onServerDeleted();
+              }
+            }}
+          />
+        </>
+      ) : (
         <Form
           form={form}
           onFinish={isEditing ? handleSaveEdit : handleSubmit}

@@ -41,8 +41,8 @@ type RateLimiter struct {
 func NewRateLimiter() *RateLimiter {
 	return &RateLimiter{
 		requests: make(map[string][]time.Time),
-		limit:    100,              // 100 requests
-		window:   time.Minute * 15, // per 15 minutes
+		limit:    1000,             // 1000 requests
+		window:   time.Minute * 5,  // per 5 minutes
 	}
 }
 

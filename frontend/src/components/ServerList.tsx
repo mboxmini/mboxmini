@@ -1,10 +1,11 @@
-import React from 'react';
-import { Table, Button, Tag, Space, Popconfirm, message } from 'antd';
+import React, { useState } from 'react';
+import { Table, Button, Tag, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import styled from 'styled-components';
-import { Server, startServer, stopServer, deleteServer } from '../api/server';
+import { Server, startServer, stopServer } from '../api/server';
 import { colors } from '../theme';
 import { PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import DeleteServerModal from './DeleteServerModal';
 
 const getStatusColor = (status: string): string => {
   switch (status.toLowerCase()) {
@@ -25,9 +26,17 @@ interface Props {
   servers: Server[];
   loading?: boolean;
   onServerClick: (serverId: string) => void;
+  onServerDeleted?: () => void;
 }
 
-const ServerList: React.FC<Props> = ({ servers, loading = false, onServerClick }) => {
+const ServerList: React.FC<Props> = ({
+  servers,
+  loading = false,
+  onServerClick,
+  onServerDeleted,
+}) => {
+  const [serverToDelete, setServerToDelete] = useState<string | null>(null);
+
   const handleStartServer = async (serverId: string) => {
     try {
       await startServer(serverId);
@@ -47,17 +56,6 @@ const ServerList: React.FC<Props> = ({ servers, loading = false, onServerClick }
     } catch (error) {
       console.error('Error stopping server:', error);
       message.error('Failed to stop server');
-    }
-  };
-
-  const handleDeleteServer = async (serverId: string) => {
-    try {
-      await deleteServer(serverId);
-      message.success('Server deleted');
-      onServerClick(serverId);
-    } catch (error) {
-      console.error('Error deleting server:', error);
-      message.error('Failed to delete server');
     }
   };
 
@@ -109,16 +107,13 @@ const ServerList: React.FC<Props> = ({ servers, loading = false, onServerClick }
             disabled={record.status === 'stopped' || record.status === 'stopping'}
             title="Stop Server"
           />
-          <Popconfirm
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => setServerToDelete(record.id)}
             title="Delete Server"
-            description="Are you sure you want to delete this server? This action cannot be undone."
-            onConfirm={() => handleDeleteServer(record.id)}
-            okText="Yes"
-            cancelText="No"
-            okButtonProps={{ danger: true }}
-          >
-            <Button type="text" danger icon={<DeleteOutlined />} title="Delete Server" />
-          </Popconfirm>
+          />
           <Button type="link" onClick={() => onServerClick(record.id)}>
             Details
           </Button>
@@ -128,16 +123,27 @@ const ServerList: React.FC<Props> = ({ servers, loading = false, onServerClick }
   ];
 
   return (
-    <StyledTable<Server>
-      columns={columns}
-      dataSource={servers}
-      rowKey="id"
-      pagination={false}
-      locale={{
-        emptyText: 'No servers found. Create one to get started!',
-      }}
-      loading={loading}
-    />
+    <>
+      <StyledTable<Server>
+        columns={columns}
+        dataSource={servers}
+        rowKey="id"
+        pagination={false}
+        locale={{
+          emptyText: 'No servers found. Create one to get started!',
+        }}
+        loading={loading}
+      />
+      <DeleteServerModal
+        serverId={serverToDelete}
+        onClose={() => setServerToDelete(null)}
+        onDeleted={() => {
+          if (onServerDeleted) {
+            onServerDeleted();
+          }
+        }}
+      />
+    </>
   );
 };
 

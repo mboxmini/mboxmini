@@ -159,6 +159,7 @@ const App: React.FC = () => {
                     servers={servers}
                     loading={loading}
                     onServerClick={handleOpenServer}
+                    onServerDeleted={handleServerDeleted}
                   />
                 </>
               )}
