@@ -1,11 +1,47 @@
 import React, { useEffect, useState } from 'react';
 import { List, Typography } from 'antd';
 import styled from 'styled-components';
+import { colors } from '../theme';
+import { UserOutlined } from '@ant-design/icons';
 import { getServerPlayers } from '../api/server';
 
 const { Title } = Typography;
 
-const PlayerList: React.FC<{ serverId: string }> = ({ serverId }) => {
+const StyledCard = styled.div`
+  background: ${colors.surface};
+  border: 1px solid ${colors.border};
+  border-radius: 8px;
+  padding: 24px;
+  height: 100%;
+`;
+
+const StyledList = styled(List<string>)`
+  .ant-list-item {
+    border-color: ${colors.border};
+    padding: 12px 0;
+  }
+
+  .ant-list-empty-text {
+    color: ${colors.textSecondary};
+  }
+`;
+
+const PlayerItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: ${colors.text};
+
+  .anticon {
+    color: ${colors.textSecondary};
+  }
+`;
+
+interface Props {
+  serverId: string;
+}
+
+const PlayerList: React.FC<Props> = ({ serverId }) => {
   const [players, setPlayers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -29,39 +65,28 @@ const PlayerList: React.FC<{ serverId: string }> = ({ serverId }) => {
     }
   }, [serverId]);
 
-  const noPlayersMessage = !serverId ? 'No server selected' : 'No players online';
-
   return (
-    <StyledSidebar>
-      <Title level={4}>Players</Title>
-      {!players || players.length === 0 ? (
-        <StyledNoPlayers>{noPlayersMessage}</StyledNoPlayers>
-      ) : (
-        <List
-          dataSource={players}
-          renderItem={player => <StyledListItem>{player}</StyledListItem>}
-          loading={loading}
-        />
-      )}
-    </StyledSidebar>
+    <StyledCard>
+      <Title level={4} style={{ color: colors.text, marginTop: 0 }}>
+        Online Players
+      </Title>
+      <StyledList
+        dataSource={players}
+        renderItem={player => (
+          <List.Item>
+            <PlayerItem>
+              <UserOutlined />
+              {player}
+            </PlayerItem>
+          </List.Item>
+        )}
+        loading={loading}
+        locale={{
+          emptyText: 'No players online',
+        }}
+      />
+    </StyledCard>
   );
 };
-
-const StyledSidebar = styled.div`
-  background: #fff;
-  padding: 24px;
-  min-width: 250px;
-  border-left: 1px solid #f0f0f0;
-`;
-
-const StyledListItem = styled(List.Item)`
-  padding: 8px 0;
-`;
-
-const StyledNoPlayers = styled.div`
-  color: #999;
-  text-align: center;
-  padding: 16px;
-`;
 
 export default PlayerList;

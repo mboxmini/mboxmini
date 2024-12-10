@@ -42,6 +42,17 @@ const MainSection = styled.div`
   gap: 24px;
 `;
 
+const SideSection = styled.div`
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+  }
+`;
+
 const CreateButtonContainer = styled.div`
   display: flex;
   justify-content: flex-end;
@@ -123,16 +134,20 @@ const App: React.FC = () => {
         </StyledHeader>
         <StyledContent>
           {selectedServer ? (
-            <MainSection>
-              <ServerControl
-                key={selectedServer}
-                serverId={selectedServer}
-                onServerCreated={handleServerCreated}
-                onServerDeleted={handleServerDeleted}
-              />
-              <Console serverId={selectedServer} />
-              <PlayerList serverId={selectedServer} />
-            </MainSection>
+            <>
+              <MainSection>
+                <ServerControl
+                  key={selectedServer}
+                  serverId={selectedServer}
+                  onServerCreated={handleServerCreated}
+                  onServerDeleted={handleServerDeleted}
+                />
+                <Console serverId={selectedServer} />
+              </MainSection>
+              <SideSection>
+                <PlayerList serverId={selectedServer} />
+              </SideSection>
+            </>
           ) : (
             <MainSection>
               {showCreateForm ? (
