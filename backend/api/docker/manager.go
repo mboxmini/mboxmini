@@ -348,45 +348,51 @@ func (m *Manager) StopServer(serverID string) error {
 	})
 }
 
-func (m *Manager) ExecuteCommand(ctx context.Context, serverID, cmd string) error {
+func (m *Manager) ExecuteCommand(ctx context.Context, serverID string, command string) (string, error) {
 	execConfig := types.ExecConfig{
-		AttachStdin:  true,
+		Cmd:          []string{"rcon-cli", command},
 		AttachStdout: true,
 		AttachStderr: true,
-		Tty:          true,
-		Cmd:          []string{"rcon-cli", cmd},
 	}
-
-	log.Printf("Executing command in container %s: %v", serverID, execConfig.Cmd)
 
 	execID, err := m.client.ContainerExecCreate(ctx, serverID, execConfig)
 	if err != nil {
-		return fmt.Errorf("failed to create exec: %v", err)
+		return "", fmt.Errorf("failed to create exec: %v", err)
 	}
 
 	resp, err := m.client.ContainerExecAttach(ctx, execID.ID, types.ExecStartCheck{})
 	if err != nil {
-		return fmt.Errorf("failed to attach to exec: %v", err)
+		return "", fmt.Errorf("failed to attach to exec: %v", err)
 	}
 	defer resp.Close()
 
+	// Read the output
 	output, err := io.ReadAll(resp.Reader)
 	if err != nil {
-		return fmt.Errorf("failed to read exec output: %v", err)
+		return "", fmt.Errorf("failed to read exec output: %v", err)
 	}
 
-	log.Printf("Command output: %s", string(output))
-	return nil
+	// Get the exit code
+	inspectResp, err := m.client.ContainerExecInspect(ctx, execID.ID)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect exec: %v", err)
+	}
+
+	if inspectResp.ExitCode != 0 {
+		return "", fmt.Errorf("command failed with exit code %d", inspectResp.ExitCode)
+	}
+
+	return string(output), nil
 }
 
 func (m *Manager) getPlayers(serverID string) ([]string, error) {
 	execConfig := types.ExecConfig{
 		AttachStdin:  true,
-		AttachStdout: true,
-		AttachStderr: true,
-		Tty:          true,
+			AttachStdout: true,
+			AttachStderr: true,
+			Tty:          true,
 
-		Cmd: []string{"rcon-cli", "list"},
+			Cmd: []string{"rcon-cli", "list"},
 	}
 
 	log.Printf("Getting player list for server %s", serverID)
@@ -464,4 +470,39 @@ func (m *Manager) DeleteServer(serverID string, removeFiles bool) error {
 	m.mu.Unlock()
 
 	return nil
+}
+
+func (m *Manager) GetServerPlayers(ctx context.Context, serverID string) ([]string, error) {
+	// Execute the list command
+	output, err := m.ExecuteCommand(ctx, serverID, "list")
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute list command: %v", err)
+	}
+
+	// Parse the output to extract player names
+	// Expected format: "There are X of a max of Y players online: player1, player2, ..."
+	// or "There are 0 of a max of Y players online."
+	players := []string{}
+
+	parts := strings.Split(output, ":")
+	if len(parts) < 2 {
+		// No players online
+		return players, nil
+	}
+
+	// Get the player names part and split by commas
+	playerList := strings.TrimSpace(parts[1])
+	if playerList == "" {
+		return players, nil
+	}
+
+	// Split player names and trim spaces
+	for _, player := range strings.Split(playerList, ",") {
+		name := strings.TrimSpace(player)
+		if name != "" {
+			players = append(players, name)
+		}
+	}
+
+	return players, nil
 }

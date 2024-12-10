@@ -49,6 +49,7 @@ func (h *ServerHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/servers/{id}/start", h.StartServer).Methods("POST", "OPTIONS")
 	r.HandleFunc("/servers/{id}/stop", h.StopServer).Methods("POST", "OPTIONS")
 	r.HandleFunc("/servers/{id}/command", h.ExecuteCommand).Methods("POST", "OPTIONS")
+	r.HandleFunc("/servers/{id}/players", h.GetPlayers).Methods("GET", "OPTIONS")
 }
 
 func (h *ServerHandler) ListServers(w http.ResponseWriter, r *http.Request) {
@@ -148,12 +149,16 @@ func (h *ServerHandler) ExecuteCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.dockerManager.ExecuteCommand(r.Context(), serverID, cmd.Command); err != nil {
+	output, err := h.dockerManager.ExecuteCommand(r.Context(), serverID, cmd.Command)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"status": "command executed"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "command executed",
+		"output": output,
+	})
 }
 
 func (h *ServerHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
@@ -175,4 +180,36 @@ func (h *ServerHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+}
+
+func (h *ServerHandler) GetPlayers(w http.ResponseWriter, r *http.Request) {
+	serverID := mux.Vars(r)["id"]
+	if serverID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// First check if server exists and is running
+	status, err := h.dockerManager.GetServerStatus(serverID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if status.Status != "running" {
+		// Return empty list if server is not running
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]string{})
+		return
+	}
+
+	// Execute the list command to get current players
+	players, err := h.dockerManager.GetServerPlayers(r.Context(), serverID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(players)
 }

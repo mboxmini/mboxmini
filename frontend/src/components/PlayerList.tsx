@@ -44,17 +44,27 @@ interface Props {
 const PlayerList: React.FC<Props> = ({ serverId }) => {
   const [players, setPlayers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      setLoading(true);
+      if (!serverId) return;
+
+      // Only show loading on initial load
+      if (initialLoad) {
+        setLoading(true);
+      }
+
       try {
         const data = await getServerPlayers(serverId);
         setPlayers(data);
       } catch (error) {
         console.error('Error fetching players:', error);
       } finally {
-        setLoading(false);
+        if (initialLoad) {
+          setLoading(false);
+          setInitialLoad(false);
+        }
       }
     };
 
@@ -63,7 +73,7 @@ const PlayerList: React.FC<Props> = ({ serverId }) => {
       const interval = setInterval(fetchPlayers, 5000);
       return () => clearInterval(interval);
     }
-  }, [serverId]);
+  }, [serverId, initialLoad]);
 
   return (
     <StyledCard>
@@ -80,7 +90,7 @@ const PlayerList: React.FC<Props> = ({ serverId }) => {
             </PlayerItem>
           </List.Item>
         )}
-        loading={loading}
+        loading={loading && initialLoad}
         locale={{
           emptyText: 'No players online',
         }}

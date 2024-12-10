@@ -35,9 +35,11 @@ const ServerList: React.FC<Props> = ({
   onServerClick,
   onServerDeleted,
 }) => {
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [serverToDelete, setServerToDelete] = useState<string | null>(null);
 
   const handleStartServer = async (serverId: string) => {
+    setActionLoading(serverId);
     try {
       await startServer(serverId);
       message.success('Server starting');
@@ -45,10 +47,13 @@ const ServerList: React.FC<Props> = ({
     } catch (error) {
       console.error('Error starting server:', error);
       message.error('Failed to start server');
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleStopServer = async (serverId: string) => {
+    setActionLoading(serverId);
     try {
       await stopServer(serverId);
       message.success('Server stopping');
@@ -56,6 +61,8 @@ const ServerList: React.FC<Props> = ({
     } catch (error) {
       console.error('Error stopping server:', error);
       message.error('Failed to stop server');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -98,6 +105,7 @@ const ServerList: React.FC<Props> = ({
             icon={<PlayCircleOutlined />}
             onClick={() => handleStartServer(record.id)}
             disabled={record.status === 'running' || record.status === 'starting'}
+            loading={actionLoading === record.id}
             title="Start Server"
           />
           <Button
@@ -105,6 +113,7 @@ const ServerList: React.FC<Props> = ({
             icon={<PauseCircleOutlined />}
             onClick={() => handleStopServer(record.id)}
             disabled={record.status === 'stopped' || record.status === 'stopping'}
+            loading={actionLoading === record.id}
             title="Stop Server"
           />
           <Button
@@ -112,9 +121,14 @@ const ServerList: React.FC<Props> = ({
             danger
             icon={<DeleteOutlined />}
             onClick={() => setServerToDelete(record.id)}
+            disabled={actionLoading === record.id}
             title="Delete Server"
           />
-          <Button type="link" onClick={() => onServerClick(record.id)}>
+          <Button
+            type="link"
+            onClick={() => onServerClick(record.id)}
+            disabled={actionLoading === record.id}
+          >
             Details
           </Button>
         </Space>
@@ -132,7 +146,7 @@ const ServerList: React.FC<Props> = ({
         locale={{
           emptyText: 'No servers found. Create one to get started!',
         }}
-        loading={loading}
+        loading={loading && servers.length === 0}
       />
       <DeleteServerModal
         serverId={serverToDelete}

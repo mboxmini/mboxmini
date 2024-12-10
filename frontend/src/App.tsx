@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Layout, ConfigProvider, theme, Button, Space, message } from 'antd';
+import { Layout, ConfigProvider, theme, Button, Space, message, Modal } from 'antd';
 import styled from 'styled-components';
 import { colors } from './theme';
 import ServerControl from './components/ServerControl';
@@ -7,7 +7,12 @@ import Console from './components/Console';
 import PlayerList from './components/PlayerList';
 import ServerList from './components/ServerList';
 import { Server, listServers, debouncedListServers } from './api/server';
-import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  PlusOutlined,
+  CheckCircleFilled,
+  DisconnectOutlined,
+} from '@ant-design/icons';
 
 const { Content, Header } = Layout;
 
@@ -23,6 +28,38 @@ const StyledHeader = styled(Header)`
   display: flex;
   align-items: center;
   gap: 16px;
+`;
+
+const HeaderContent = styled.div`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+`;
+
+const ConnectionErrorModal = styled(Modal)`
+  .ant-modal-content {
+    background: ${colors.surface};
+  }
+  .ant-modal-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px;
+    text-align: center;
+  }
+  .icon {
+    font-size: 48px;
+    color: ${colors.accent1};
+  }
+  .message {
+    font-size: 16px;
+    color: ${colors.text};
+  }
+  .description {
+    color: ${colors.textSecondary};
+  }
 `;
 
 const StyledContent = styled(Content)`
@@ -73,28 +110,36 @@ const App: React.FC = () => {
   const [servers, setServers] = useState<Server[]>([]);
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isDisconnected, setIsDisconnected] = useState(false);
 
-  const fetchServers = async () => {
-    setLoading(true);
+  const fetchServers = async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       const serverList = await debouncedListServers();
       setServers(serverList);
+      setIsDisconnected(false);
     } catch (error) {
       console.error('Error fetching servers:', error);
-      message.error('Failed to fetch servers');
+      setIsDisconnected(true);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
+      setInitialLoading(false);
     }
   };
 
   useEffect(() => {
     if (!selectedServer) {
-      fetchServers();
-      const interval = setInterval(fetchServers, 5000);
+      fetchServers(initialLoading);
+      const interval = setInterval(() => fetchServers(false), 5000);
       return () => clearInterval(interval);
     }
-  }, [selectedServer]);
+  }, [selectedServer, initialLoading]);
 
   const handleServerCreated = (serverId: string) => {
     setSelectedServer(serverId);
@@ -172,7 +217,7 @@ const App: React.FC = () => {
                   </CreateButtonContainer>
                   <ServerList
                     servers={servers}
-                    loading={loading}
+                    loading={loading || initialLoading}
                     onServerClick={handleOpenServer}
                     onServerDeleted={handleServerDeleted}
                   />
@@ -181,6 +226,25 @@ const App: React.FC = () => {
             </MainSection>
           )}
         </StyledContent>
+        <ConnectionErrorModal
+          open={isDisconnected}
+          footer={null}
+          closable={false}
+          maskClosable={false}
+          centered
+        >
+          <DisconnectOutlined className="icon" />
+          <div className="message">Connection Lost</div>
+          <div className="description">
+            Unable to connect to the server. Please check if:
+            <br />
+            • The server is running
+            <br />
+            • Your network connection is stable
+            <br />
+            The app will automatically reconnect when the server is available.
+          </div>
+        </ConnectionErrorModal>
       </StyledLayout>
     </ConfigProvider>
   );
