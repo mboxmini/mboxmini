@@ -11,12 +11,14 @@ RUN npm install
 # Copy the rest of the code
 COPY . .
 
-# Run formatting and linting
-RUN npm run format
-RUN npm run lint:fix
+# Build the app
+RUN npm run build
+
+# Install serve to run the built app
+RUN npm install -g serve
 
 # Expose port 3000
 EXPOSE 3000
 
-# Start in development mode
-CMD ["npm", "start"] 
+# Start the app using serve
+CMD ["serve", "-s", "dist", "-l", "3000"]
