@@ -193,23 +193,57 @@ export const getServerPlayers = async (serverId: string): Promise<string[]> => {
   }
 };
 
-export const executeCommand = async (serverId: string, command: string): Promise<boolean> => {
+interface CommandResponseSuccess {
+  status: 'success';
+  output: string;
+}
+
+interface CommandResponseError {
+  status: 'error';
+  error: string;
+}
+
+type CommandResponse = CommandResponseSuccess | CommandResponseError;
+
+export const executeCommand = async (
+  serverId: string,
+  command: string
+): Promise<CommandResponse> => {
   try {
-    await fetch(`${API_CONFIG.API_URL}/api/servers/${serverId}/command`, {
+    const response = await fetch(`${API_CONFIG.API_URL}/api/servers/${serverId}/command`, {
       method: 'POST',
-      headers: API_HEADERS,
+      headers: {
+        ...API_HEADERS,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ command }),
     });
-    return true;
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorResponse: CommandResponseError = {
+        status: 'error',
+        error: data.error || 'Failed to execute command',
+      };
+      return errorResponse;
+    }
+
+    const successResponse: CommandResponseSuccess = {
+      status: 'success',
+      output: data.output || '',
+    };
+    return successResponse;
   } catch (error) {
     console.error('Error executing command:', error);
-    return false;
+    throw error;
   }
 };
 
 export const deleteServer = async (serverId: string, removeFiles = false): Promise<boolean> => {
   try {
-    await fetch(`${API_CONFIG.API_URL}/api/servers/${serverId}`, {
+    console.log(`Attempting to delete server ${serverId} with removeFiles=${removeFiles}`);
+    const response = await fetch(`${API_CONFIG.API_URL}/api/servers/${serverId}`, {
       method: 'DELETE',
       headers: {
         ...API_HEADERS,
@@ -217,6 +251,16 @@ export const deleteServer = async (serverId: string, removeFiles = false): Promi
       },
       body: JSON.stringify({ remove_files: removeFiles }),
     });
+
+    console.log('Delete server response status:', response.status);
+    const data = await response.json();
+    console.log('Delete server response:', data);
+
+    if (!response.ok) {
+      console.error('Server deletion failed:', data);
+      return false;
+    }
+
     return true;
   } catch (error) {
     console.error('Error deleting server:', error);

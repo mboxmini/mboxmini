@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, message, Select, Space, Typography } from 'antd';
+import { Form, Input, Button, message, Select, Space, Typography, Divider } from 'antd';
 import type { SelectProps } from 'antd';
 import styled from 'styled-components';
 import {
@@ -22,6 +22,7 @@ import {
   CloseOutlined,
 } from '@ant-design/icons';
 import DeleteServerModal from './DeleteServerModal';
+import Console from './Console';
 
 const { Text } = Typography;
 
@@ -167,6 +168,11 @@ const getStatusColor = (status: string): string => {
       return 'default';
   }
 };
+
+const StyledDivider = styled(Divider)`
+  margin: 24px 0;
+  border-color: ${colors.border};
+`;
 
 const ServerControl: React.FC<Props> = ({ serverId, onServerCreated, onServerDeleted }) => {
   const [loading, setLoading] = useState(false);
@@ -432,12 +438,10 @@ const ServerControl: React.FC<Props> = ({ serverId, onServerCreated, onServerDel
           <DeleteServerModal
             serverId={showDeleteModal ? serverId : null}
             onClose={() => setShowDeleteModal(false)}
-            onDeleted={() => {
-              if (onServerDeleted) {
-                onServerDeleted();
-              }
-            }}
+            onDeleted={() => onServerDeleted?.()}
           />
+          <StyledDivider />
+          <Console serverId={serverId} />
         </>
       ) : (
         <Form

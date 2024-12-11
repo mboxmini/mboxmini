@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/mboxmini/mboxmini/backend/api/docker"
@@ -53,10 +54,18 @@ func (h *ServerHandler) RegisterRoutes(r *mux.Router) {
 }
 
 func (h *ServerHandler) ListServers(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request to list servers")
+	
 	servers, err := h.dockerManager.ListServers()
 	if err != nil {
+		log.Printf("Error listing servers: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	log.Printf("Found %d servers", len(servers))
+	for i, server := range servers {
+		log.Printf("Server %d: ID=%s, Name=%s, Status=%s", i+1, server.ID, server.Name, server.Status)
 	}
 
 	json.NewEncoder(w).Encode(servers)
@@ -155,8 +164,20 @@ func (h *ServerHandler) ExecuteCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if output contains error messages
+	if strings.Contains(output, "Unknown or incomplete command") ||
+		strings.Contains(output, "Invalid command") ||
+		strings.Contains(output, "Error:") {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "error",
+			"error":  output,
+		})
+		return
+	}
+
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "command executed",
+		"status": "success",
 		"output": output,
 	})
 }
@@ -171,14 +192,19 @@ func (h *ServerHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
 	var req DeleteServerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		// If no body is provided, default to not removing files
+		log.Printf("No request body provided or error decoding, defaulting removeFiles to false: %v", err)
 		req.RemoveFiles = false
 	}
 
+	log.Printf("Deleting server %s with removeFiles=%v", serverID, req.RemoveFiles)
+
 	if err := h.dockerManager.DeleteServer(serverID, req.RemoveFiles); err != nil {
+		log.Printf("Error deleting server %s: %v", serverID, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("Successfully deleted server %s", serverID)
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
 

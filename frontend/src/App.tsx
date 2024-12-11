@@ -171,25 +171,22 @@ const App: React.FC = () => {
     <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
       <StyledLayout>
         <StyledHeader>
-          <h1 style={{ color: colors.text, margin: 0 }}>MBoxMini</h1>
+          <HeaderContent>
+            {selectedServer ? (
+              <Button
+                icon={<ArrowLeftOutlined />}
+                onClick={handleBackToList}
+                type="text"
+                style={{ color: colors.text }}
+              />
+            ) : null}
+            <h1 style={{ color: colors.text, margin: 0, fontSize: '20px' }}>MBoxMini</h1>
+          </HeaderContent>
         </StyledHeader>
         <StyledContent>
           {selectedServer ? (
             <>
               <MainSection>
-                <ListHeader>
-                  <Space>
-                    <Button
-                      icon={<ArrowLeftOutlined />}
-                      onClick={handleBackToList}
-                      type="text"
-                      style={{ color: colors.text }}
-                    />
-                    <Title level={2} style={{ color: colors.text, margin: 0 }}>
-                      Server Details
-                    </Title>
-                  </Space>
-                </ListHeader>
                 <ServerControl
                   key={selectedServer}
                   serverId={selectedServer}
@@ -224,7 +221,7 @@ const App: React.FC = () => {
               ) : (
                 <>
                   <ListHeader>
-                    <Title level={2} style={{ color: colors.text, margin: 0 }}>
+                    <Title level={3} style={{ color: colors.text, margin: 0, fontSize: '18px' }}>
                       Available Servers
                     </Title>
                     <Button

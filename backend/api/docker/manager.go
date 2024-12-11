@@ -57,10 +57,6 @@ func NewManager(dataPath string, portStart, portEnd int) (*Manager, error) {
 	}
 
 	for _, cont := range containers {
-		if !strings.HasPrefix(cont.Image, "itzg/minecraft-server") {
-			continue
-		}
-
 		for _, p := range cont.Ports {
 			if p.PrivatePort == 25565 {
 				m.portInUse[int(p.PublicPort)] = strings.TrimPrefix(cont.Names[0], "/")
@@ -232,61 +228,79 @@ func (m *Manager) CreateServer(name, version, memory string) (string, error) {
 }
 
 func (m *Manager) ListServers() ([]ServerInfo, error) {
-	containers, err := m.client.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+	log.Printf("Listing Docker containers")
+	
+	containers, err := m.client.ContainerList(context.Background(), types.ContainerListOptions{
+		All: true,
+	})
 	if err != nil {
+		log.Printf("Error listing containers: %v", err)
 		return nil, fmt.Errorf("failed to list containers: %v", err)
 	}
 
+	log.Printf("Found %d total containers", len(containers))
+
 	var servers []ServerInfo
-	for _, cont := range containers {
-		// Only include containers that use the Minecraft server image
-		if !strings.HasPrefix(cont.Image, "itzg/minecraft-server") {
+	for _, container := range containers {
+		// Get container name without leading slash
+		if len(container.Names) == 0 {
 			continue
 		}
-
-		serverID := strings.TrimPrefix(cont.Names[0], "/")
-		inspect, err := m.client.ContainerInspect(context.Background(), cont.ID)
-		if err != nil {
-			log.Printf("Error inspecting container %s: %v", serverID, err)
+		name := strings.TrimPrefix(container.Names[0], "/")
+		
+		// Skip containers that use MBoxMini application images
+		if strings.HasPrefix(container.Image, "mboxmini-") {
+			log.Printf("Skipping container %s: uses MBoxMini application image", name)
 			continue
 		}
-
-		// Extract version from environment variables
-		var version string
-		for _, env := range inspect.Config.Env {
-			if strings.HasPrefix(env, "VERSION=") {
-				version = strings.TrimPrefix(env, "VERSION=")
-				break
-			}
+		
+		// Only include containers with mboxmini- prefix
+		if !strings.HasPrefix(name, "mboxmini-") {
+			log.Printf("Skipping container %s: not a Minecraft server", name)
+			continue
 		}
-
+		
+		log.Printf("Processing Minecraft server: %s", name)
+		
 		// Get port mapping
-		var port int
-		for _, p := range cont.Ports {
+		port := 0
+		for _, p := range container.Ports {
 			if p.PrivatePort == 25565 {
 				port = int(p.PublicPort)
 				break
 			}
 		}
+		log.Printf("Server port: %d", port)
+
+		// Get server status
+		status := "stopped"
+		if container.State == "running" {
+			status = "running"
+		}
 
 		// Get players if server is running
 		var players []string
-		if cont.State == "running" {
-			if playerList, err := m.getPlayers(serverID); err == nil {
+		if status == "running" {
+			if playerList, err := m.GetServerPlayers(context.Background(), container.ID); err == nil {
 				players = playerList
+			} else {
+				log.Printf("Error getting players for server %s: %v", name, err)
 			}
 		}
 
-		servers = append(servers, ServerInfo{
-			ID:      serverID,
-			Name:    strings.TrimPrefix(serverID, "mboxmini-"),
-			Status:  cont.State,
-			Version: version,
+		serverInfo := ServerInfo{
+			ID:      container.ID,
+			Name:    strings.TrimPrefix(name, "mboxmini-"),
+			Status:  status,
 			Port:    port,
+			Version: "latest", // We'll get the actual version later if needed
 			Players: players,
-		})
+		}
+		log.Printf("Adding server: %+v", serverInfo)
+		servers = append(servers, serverInfo)
 	}
 
+	log.Printf("Returning %d servers", len(servers))
 	return servers, nil
 }
 
@@ -329,7 +343,7 @@ func (m *Manager) GetServerStatus(serverID string) (*ServerInfo, error) {
 
 	return &ServerInfo{
 		ID:      serverID,
-		Name:    strings.TrimPrefix(serverID, "mboxmini-"),
+		Name:    strings.TrimPrefix(strings.TrimPrefix(inspect.Name, "/"), "mboxmini-"),
 		Status:  inspect.State.Status,
 		Version: version,
 		Port:    port,
@@ -439,24 +453,44 @@ func (m *Manager) getPlayers(serverID string) ([]string, error) {
 }
 
 func (m *Manager) DeleteServer(serverID string, removeFiles bool) error {
+	log.Printf("Starting deletion process for server %s (removeFiles=%v)", serverID, removeFiles)
+
+	// Get container info to get the name - we might need it for removing files
+	inspect, err := m.client.ContainerInspect(context.Background(), serverID)
+	if err != nil {
+		log.Printf("Failed to inspect container %s: %v", serverID, err)
+		return fmt.Errorf("failed to inspect container: %v", err)
+	}
+	// Get server name from container name - we might need it for removing files
+	serverName := strings.TrimPrefix(inspect.Name, "/")
+
 	// Stop the container first if it's running
 	if err := m.StopServer(serverID); err != nil {
+		log.Printf("Failed to stop server %s before deletion: %v", serverID, err)
 		return fmt.Errorf("failed to stop server before deletion: %v", err)
 	}
+	log.Printf("Successfully stopped server %s", serverID)
 
 	// Remove the container
 	if err := m.client.ContainerRemove(context.Background(), serverID, types.ContainerRemoveOptions{
 		Force: true,
 	}); err != nil {
+		log.Printf("Failed to remove container %s / %s: %v", serverName,serverID, err)
 		return fmt.Errorf("failed to remove container: %v", err)
 	}
+	log.Printf("Successfully removed container %s %s", serverName, serverID)
 
 	// Remove server files if requested
 	if removeFiles {
-		serverDataDir := filepath.Join(m.dataPath, serverID)
+		serverDataDir := filepath.Join(m.dataPath, serverName)
+		log.Printf("Attempting to remove server files at %s", serverDataDir)
 		if err := os.RemoveAll(serverDataDir); err != nil {
+			log.Printf("Failed to remove server files at %s: %v", serverDataDir, err)
 			return fmt.Errorf("failed to remove server files: %v", err)
 		}
+		log.Printf("Successfully removed server files at %s", serverDataDir)
+	} else {
+		log.Printf("Skipping server files removal as removeFiles=false")
 	}
 
 	// Remove port mapping
@@ -464,11 +498,13 @@ func (m *Manager) DeleteServer(serverID string, removeFiles bool) error {
 	for port, id := range m.portInUse {
 		if id == serverID {
 			delete(m.portInUse, port)
+			log.Printf("Removed port mapping for server %s (port %d)", serverID, port)
 			break
 		}
 	}
 	m.mu.Unlock()
 
+	log.Printf("Server deletion completed successfully for %s", serverID)
 	return nil
 }
 
