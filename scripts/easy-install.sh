@@ -379,25 +379,7 @@ install_mboxmini() {
 
 # Main script
 main() {
-    # Parse command line arguments
-    FORCE_REINSTALL=false
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -f|--force)
-                FORCE_REINSTALL=true
-                shift
-                ;;
-            *)
-                INSTALL_DIR="$1"
-                shift
-                ;;
-        esac
-    done
-    
-    # Set default installation directory if not provided
-    INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
-    
-    # Detect OS and set defaults
+    # Detect OS and set defaults first
     detect_os
     
     # Check if we need sudo
@@ -407,7 +389,28 @@ main() {
         exit 1
     fi
     
+    # Parse command line arguments
+    FORCE_REINSTALL=false
+    CUSTOM_INSTALL_DIR=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -f|--force)
+                FORCE_REINSTALL=true
+                shift
+                ;;
+            *)
+                CUSTOM_INSTALL_DIR="$1"
+                shift
+                ;;
+        esac
+    done
+    
+    # Set installation directory, preferring custom if provided
+    INSTALL_DIR="${CUSTOM_INSTALL_DIR:-$DEFAULT_DIR}"
+    
     print_info "Starting MBoxMini setup on ${OS}..."
+    print_info "Installation directory: ${INSTALL_DIR}"
     
     check_docker
     check_docker_compose
@@ -434,11 +437,21 @@ main() {
     fi
 }
 
-# Update the script usage information at the top:
+# Update the usage function to be more descriptive
 print_usage() {
-    echo "Usage: $0 [-f|--force] [install_dir]"
-    echo "  -f, --force    Force reinstallation (removes existing installation)"
-    echo "  install_dir    Optional installation directory (default: $DEFAULT_DIR)"
+    echo "Usage: $0 [-f|--force] [-h|--help] [install_dir]"
+    echo
+    echo "Options:"
+    echo "  -f, --force      Force reinstallation (removes existing installation)"
+    echo "  -h, --help       Show this help message"
+    echo "  install_dir      Optional installation directory"
+    echo "                   Default: $DEFAULT_DIR"
+    echo
+    echo "Examples:"
+    echo "  $0                           # Install in default location"
+    echo "  $0 /opt/custom/mboxmini      # Install in custom location"
+    echo "  $0 --force                   # Force reinstall in default location"
+    echo "  $0 --force /opt/custom/mbox  # Force reinstall in custom location"
 }
 
 # Run main function with all arguments
