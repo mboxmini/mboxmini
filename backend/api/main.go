@@ -41,6 +41,7 @@ func main() {
 	// Initialize handlers
 	serverHandler := handlers.NewServerHandler(manager)
 	authHandler := handlers.NewAuthHandler(db, jwtSecret)
+	adminHandler := handlers.NewAdminHandler(db)
 
 	// Initialize router
 	r := mux.NewRouter()
@@ -63,8 +64,9 @@ func main() {
 	api.Use(authMiddleware.Authenticate)
 	api.Use(rateLimiter.RateLimit)
 
-	// Register server routes
+	// Register routes
 	serverHandler.RegisterRoutes(api)
+	adminHandler.RegisterRoutes(api)
 
 	// Start server
 	port := os.Getenv("API_PORT")
