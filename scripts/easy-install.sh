@@ -310,6 +310,214 @@ SERVICE
 
 # Add to the top with other variables
 DEFAULT_BRANCH="main"
+DOCKER_IS_SNAP=false
+DOCKER_NEEDS_MIGRATION=false
+DOCKER_COMPOSE_PATH=""
+
+# Function to detect Docker installation type
+detect_docker_installation() {
+    print_info "Checking Docker installation..."
+    
+    # Check if Docker is installed via snap
+    if command -v snap >/dev/null && snap list docker >/dev/null 2>&1; then
+        DOCKER_IS_SNAP=true
+        print_info "Detected Docker installed via snap"
+        
+        # For snap installations, we'll use a bridge directory in home
+        DOCKER_COMPOSE_PATH="$HOME/.mboxmini"
+        mkdir -p "$DOCKER_COMPOSE_PATH"
+    else
+        DOCKER_IS_SNAP=false
+        DOCKER_COMPOSE_PATH="$INSTALL_DIR"
+    fi
+}
+
+# Function to setup Docker access for snap installation
+setup_snap_docker_access() {
+    if [[ "$DOCKER_IS_SNAP" == true ]]; then
+        print_info "Setting up snap Docker access..."
+        
+        # Create the bridge directory in home
+        mkdir -p "$DOCKER_COMPOSE_PATH"
+        
+        # Create a symbolic link for docker-compose.yml
+        if [ -L "$DOCKER_COMPOSE_PATH/docker-compose.yml" ]; then
+            rm "$DOCKER_COMPOSE_PATH/docker-compose.yml"
+        fi
+        ln -s "$INSTALL_DIR/docker-compose.yml" "$DOCKER_COMPOSE_PATH/docker-compose.yml"
+        
+        # Create a symbolic link for .env file
+        if [ -L "$DOCKER_COMPOSE_PATH/.env" ]; then
+            rm "$DOCKER_COMPOSE_PATH/.env"
+        fi
+        ln -s "$INSTALL_DIR/.env" "$DOCKER_COMPOSE_PATH/.env"
+        
+        # Create a symbolic link for minecraft-data directory
+        if [ -L "$DOCKER_COMPOSE_PATH/minecraft-data" ]; then
+            rm "$DOCKER_COMPOSE_PATH/minecraft-data"
+        fi
+        ln -s "$INSTALL_DIR/minecraft-data" "$DOCKER_COMPOSE_PATH/minecraft-data"
+        
+        print_info "Created bridge directory at: $DOCKER_COMPOSE_PATH"
+        print_info "Linked configuration files from: $INSTALL_DIR"
+    fi
+}
+
+# Modify the start_services function
+start_services() {
+    print_info "Starting services..."
+    
+    if [[ "$DOCKER_IS_SNAP" == true ]]; then
+        cd "$DOCKER_COMPOSE_PATH" || exit 1
+        if ! docker compose up -d; then
+            print_error "Failed to start services. Check the logs with: cd $DOCKER_COMPOSE_PATH && docker compose logs"
+            exit 1
+        fi
+    else
+        cd "$INSTALL_DIR" || exit 1
+        if ! docker compose up -d; then
+            print_error "Failed to start services. Check the logs with: cd $INSTALL_DIR && docker compose logs"
+            exit 1
+        fi
+    fi
+}
+
+# Modify the systemd service creation for snap Docker
+setup_service() {
+    print_info "Setting up auto-start service..."
+    if [[ "$OS" == "macos" ]]; then
+        # Create a launch agent for macOS
+        PLIST_FILE="$HOME/Library/LaunchAgents/com.mboxmini.app.plist"
+        mkdir -p "$HOME/Library/LaunchAgents"
+        cat > "$PLIST_FILE" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mboxmini.app</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/docker</string>
+        <string>compose</string>
+        <string>-f</string>
+        <string>__INSTALL_DIR__/docker-compose.yml</string>
+        <string>up</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>API_KEY</key>
+        <string>__API_KEY__</string>
+        <key>JWT_SECRET</key>
+        <string>__JWT_SECRET__</string>
+        <key>ADMIN_PASSWORD</key>
+        <string>__ADMIN_PASSWORD__</string>
+        <key>HOST_DATA_PATH</key>
+        <string>./minecraft-data</string>
+        <key>DATA_PATH</key>
+        <string>/minecraft-data</string>
+        <key>DB_PATH</key>
+        <string>/data/mboxmini.db</string>
+        <key>API_PORT</key>
+        <string>__API_PORT__</string>
+        <key>FRONTEND_PORT</key>
+        <string>__FRONTEND_PORT__</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>WorkingDirectory</key>
+    <string>__INSTALL_DIR__</string>
+    <key>StandardOutPath</key>
+    <string>__INSTALL_DIR__/mboxmini.log</string>
+    <key>StandardErrorPath</key>
+    <string>__INSTALL_DIR__/mboxmini.error.log</string>
+</dict>
+</plist>
+PLIST
+        # Replace placeholders in plist file
+        sed -i \
+            -e "s|__INSTALL_DIR__|${INSTALL_DIR}|g" \
+            -e "s|__API_KEY__|${API_KEY}|g" \
+            -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
+            -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
+            -e "s|__API_PORT__|${API_PORT:-$DEFAULT_API_PORT}|g" \
+            -e "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|g" \
+            "$PLIST_FILE"
+        chmod 644 "$PLIST_FILE"
+        launchctl load "$PLIST_FILE"
+    else
+        # Create systemd service for Linux
+        if [[ "$DOCKER_IS_SNAP" == true ]]; then
+            # For snap Docker, use the bridge directory
+            cat > /etc/systemd/system/mboxmini.service << SERVICE
+[Unit]
+Description=MBoxMini Minecraft Server Manager
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${DOCKER_COMPOSE_PATH}
+EnvironmentFile=${INSTALL_DIR}/.env
+Environment=COMPOSE_PROJECT_NAME=mboxmini
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=${DEFAULT_USER}
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+        else
+            # ... existing systemd service setup for non-snap Docker ...
+        fi
+        
+        systemctl daemon-reload
+        systemctl enable mboxmini.service
+    fi
+}
+
+# Function to handle Docker installation migration
+handle_docker_migration() {
+    if [[ "$DOCKER_NEEDS_MIGRATION" == true ]]; then
+        echo
+        print_warning "The current Docker snap installation may cause issues with file access."
+        print_warning "It is recommended to switch to the official Docker repository installation."
+        echo
+        read -p "Would you like to switch to the official Docker installation? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Migrating Docker installation..."
+            
+            # Stop any running containers
+            docker compose down 2>/dev/null || true
+            
+            # Remove snap Docker
+            print_info "Removing Docker snap..."
+            sudo snap remove docker
+            
+            # Install official Docker
+            print_info "Installing official Docker..."
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sudo sh get-docker.sh
+            
+            # Add current user to docker group
+            print_info "Adding user to docker group..."
+            sudo usermod -aG docker "$USER"
+            
+            print_info "Docker migration completed successfully!"
+            print_warning "Please log out and log back in for group changes to take effect"
+            print_warning "Then run this script again to complete the installation"
+            exit 0
+        else
+            print_warning "Continuing with snap Docker installation..."
+            print_warning "Some features may not work correctly"
+            echo
+        fi
+    fi
+}
 
 # Download necessary files
 download_files() {
@@ -547,6 +755,7 @@ install_mboxmini() {
 main() {
     # Detect OS and set defaults first
     detect_os
+    detect_docker_installation
     
     # Check if we need sudo
     if [[ "$NEED_SUDO" == true && "$EUID" -ne 0 ]]; then
@@ -554,6 +763,9 @@ main() {
         echo "sudo $0 $([[ "$FORCE_REINSTALL" == true ]] && echo '--force')"
         exit 1
     fi
+    
+    # Handle Docker migration if needed
+    handle_docker_migration
     
     # Parse command line arguments
     FORCE_REINSTALL=false
@@ -622,6 +834,9 @@ main() {
         print_info "Installing MboxMini in $INSTALL_DIR"
         install_mboxmini
     fi
+    
+    # Setup snap Docker access if needed
+    setup_snap_docker_access
 }
 
 # Update the usage function
