@@ -111,7 +111,49 @@ export const ServerShow: React.FC = () => {
   };
 
   return (
-    <Show isLoading={isLoading}>
+    <Show 
+      isLoading={isLoading}
+      headerButtons={[
+        <Button
+          key="start"
+          type="primary"
+          icon={actionLoading === 'start' ? <LoadingOutlined /> : <PlayCircleOutlined />}
+          onClick={handleStartServer}
+          disabled={
+            actionLoading !== null ||
+            record?.status === "running" ||
+            record?.status === "starting"
+          }
+          loading={actionLoading === 'start'}
+        >
+          Start Server
+        </Button>,
+        <Button
+          key="stop"
+          danger
+          icon={actionLoading === 'stop' ? <LoadingOutlined /> : <PauseCircleOutlined />}
+          onClick={handleStopServer}
+          disabled={
+            actionLoading !== null ||
+            record?.status !== "running"
+          }
+          loading={actionLoading === 'stop'}
+        >
+          Stop Server
+        </Button>,
+        <Button
+          key="delete"
+          type="default"
+          icon={<DeleteOutlined />}
+          onClick={handleDeleteServer}
+          disabled={actionLoading !== null}
+          loading={actionLoading === 'delete'}
+          style={{ borderColor: '#ff4d4f', color: '#ff4d4f' }}
+        >
+          Delete Server
+        </Button>
+      ]}
+    >
       <Row gutter={16}>
         <Col flex="auto">
           <Space direction="vertical" style={{ width: "100%" }}>
@@ -146,46 +188,6 @@ export const ServerShow: React.FC = () => {
                       </Tooltip>
                     </div>
                   </div>
-                </div>
-                <Divider />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Space size="middle">
-                    <Button
-                      type="primary"
-                      icon={actionLoading === 'start' ? <LoadingOutlined /> : <PlayCircleOutlined />}
-                      onClick={handleStartServer}
-                      disabled={
-                        actionLoading !== null ||
-                        record?.status === "running" ||
-                        record?.status === "starting"
-                      }
-                      loading={actionLoading === 'start'}
-                    >
-                      Start Server
-                    </Button>
-                    <Button
-                      danger
-                      icon={actionLoading === 'stop' ? <LoadingOutlined /> : <PauseCircleOutlined />}
-                      onClick={handleStopServer}
-                      disabled={
-                        actionLoading !== null ||
-                        record?.status !== "running"
-                      }
-                      loading={actionLoading === 'stop'}
-                    >
-                      Stop Server
-                    </Button>
-                  </Space>
-                  <Button
-                    type="default"
-                    icon={<DeleteOutlined />}
-                    onClick={handleDeleteServer}
-                    disabled={actionLoading !== null}
-                    loading={actionLoading === 'delete'}
-                    style={{ borderColor: '#ff4d4f', color: '#ff4d4f' }}
-                  >
-                    Delete Server
-                  </Button>
                 </div>
               </Space>
             </Card>

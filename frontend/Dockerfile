@@ -1,4 +1,5 @@
-FROM node:18-alpine
+# Build stage
+FROM --platform=$BUILDPLATFORM node:18-alpine AS builder
 
 WORKDIR /app
 
@@ -6,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci
 
 # Copy the rest of the code
 COPY . .
@@ -14,8 +15,16 @@ COPY . .
 # Build the app
 RUN npm run build
 
-# Install serve to run the built app
+# Production stage
+FROM --platform=$TARGETPLATFORM node:18-alpine
+
+WORKDIR /app
+
+# Install serve globally
 RUN npm install -g serve
+
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
 
 # Expose port 3000
 EXPOSE 3000

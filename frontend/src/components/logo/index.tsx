@@ -1,7 +1,7 @@
 import type { CSSProperties, SVGProps } from "react";
 import { Flex, Typography } from "antd";
 import type { TitleProps } from "antd/lib/typography/Title";
-import { IconInvoicerLogo } from "@/components/icons";
+import { IconMBoxMiniLogo } from "@/components/icons";
 import { useStyles } from "./styled";
 
 type Props = {
@@ -24,7 +24,7 @@ export const Logo = (props: Props) => {
         ...props.style,
       }}
     >
-      <IconInvoicerLogo {...props.svgProps} />
+      {/* <IconMBoxMiniLogo {...props.svgProps} /> */}
       <Flex gap={4}>
         {/* <Typography.Title
           className={styles.headerTitleRefine}

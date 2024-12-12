@@ -1,7 +1,7 @@
 import type { SVGProps } from "react";
 import { useConfigProvider } from "@/providers/config-provider";
 
-export const IconInvoicerLogo = (props: SVGProps<SVGSVGElement>) => {
+export const IconMBoxMiniLogo = (props: SVGProps<SVGSVGElement>) => {
   const { mode } = useConfigProvider();
   const isDarkMode = mode === "dark";
 

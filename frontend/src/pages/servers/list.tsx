@@ -234,7 +234,7 @@ export const ServerList: React.FC = () => {
         <Space>
           <CloudServerOutlined style={{ fontSize: '24px' }} />
           <Typography.Title level={2} style={{ margin: 0 }}>
-            Minecraft Servers
+            Minecraft Servers2
           </Typography.Title>
         </Space>
         <Button

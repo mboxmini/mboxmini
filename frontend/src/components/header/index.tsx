@@ -2,7 +2,7 @@ import React from "react";
 import type { RefineThemedLayoutV2HeaderProps } from "@refinedev/antd";
 import { useNavigation, Link } from "@refinedev/core";
 import { Layout as AntdLayout, Button, theme, Flex } from "antd";
-import { CloudServerOutlined } from "@ant-design/icons";
+import { CloudServerOutlined, TeamOutlined } from "@ant-design/icons";
 import { useLocation } from "react-router-dom";
 import { useConfigProvider } from "@/providers/config-provider";
 import { Search } from "@/components/header/search";
@@ -12,7 +12,7 @@ import { Logo } from "@/components/logo";
 import { useStyles } from "./styled";
 import styled from "styled-components";
 
-const ServerSection = styled.div`
+const NavSection = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
@@ -80,10 +80,10 @@ export const Header: React.FC<RefineThemedLayoutV2HeaderProps> = () => {
               textDecoration: "none",
             }}
           >
-            <ServerSection>
+            <NavSection>
               <CloudServerOutlined style={{ fontSize: "24px" }} />
               <span style={{ fontSize: "16px" }}>Servers</span>
-            </ServerSection>
+            </NavSection>
           </Link>
         </Flex>
         <Flex align="center" gap={32} className={styles.rightSlot}>
@@ -96,6 +96,20 @@ export const Header: React.FC<RefineThemedLayoutV2HeaderProps> = () => {
               setMode(mode === "light" ? "dark" : "light");
             }}
           />
+          <Link
+            to="/admin/users"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              color: "inherit",
+              textDecoration: "none",
+            }}
+          >
+            <Button
+              type="text"
+              icon={<TeamOutlined style={{ fontSize: "20px" }} />}
+            />
+          </Link>
           <User />
         </Flex>
       </Flex>

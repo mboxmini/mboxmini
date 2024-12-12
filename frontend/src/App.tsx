@@ -26,6 +26,7 @@ import { authProvider } from "@/providers/auth-provider";
 import { ConfigProvider } from "@/providers/config-provider";
 import "@refinedev/antd/dist/reset.css";
 import "./styles/custom.css";
+import { UserManagement } from './components/UserManagement';
 
 const App: React.FC = () => {
   return (
@@ -44,6 +45,11 @@ const App: React.FC = () => {
                   create: "/servers/new",
                   show: "/servers/:id",
                 },
+                {
+                  name: "admin/users",
+                  list: "/admin/users",
+                  identifier: "admin/users",
+                }
               ]}
               notificationProvider={useNotificationProvider}
               options={{
@@ -96,6 +102,7 @@ const App: React.FC = () => {
                     <Route path="new" element={<ServerCreate />} />
                     <Route path=":id" element={<ServerShow />} />
                   </Route>
+                  <Route path="/admin/users" element={<UserManagement />} />
                   <Route path="*" element={<ErrorComponent />} />
                 </Route>
               </Routes>
