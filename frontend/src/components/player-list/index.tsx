@@ -1,27 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { List, Typography } from 'antd';
+import { List, Typography, theme } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import { getServerPlayers } from '@/api/servers';
 import styled from 'styled-components';
 
-const { Title } = Typography;
-
-const StyledCard = styled.div`
-  background: #fff;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-  padding: 24px;
-  height: 100%;
-`;
-
 const ListWrapper = styled.div`
   .ant-list-item {
-    border-color: #d9d9d9;
+    border-color: ${() => {
+      const { useToken } = theme;
+      const { token } = useToken();
+      return token.colorBorder;
+    }};
     padding: 12px 0;
   }
 
   .ant-list-empty-text {
-    color: rgba(0, 0, 0, 0.45);
+    color: ${() => {
+      const { useToken } = theme;
+      const { token } = useToken();
+      return token.colorTextSecondary;
+    }};
   }
 `;
 
@@ -31,7 +29,11 @@ const PlayerItem = styled.div`
   gap: 8px;
 
   .anticon {
-    color: rgba(0, 0, 0, 0.45);
+    color: ${() => {
+      const { useToken } = theme;
+      const { token } = useToken();
+      return token.colorTextSecondary;
+    }};
   }
 `;
 
@@ -74,27 +76,22 @@ export const PlayerList: React.FC<Props> = ({ serverId }) => {
   }, [serverId, initialLoad]);
 
   return (
-    <StyledCard>
-      <Title level={4} style={{ marginTop: 0 }}>
-        Online Players
-      </Title>
-      <ListWrapper>
-        <List<string>
-          dataSource={players}
-          renderItem={(player: string) => (
-            <List.Item>
-              <PlayerItem>
-                <UserOutlined />
-                {player}
-              </PlayerItem>
-            </List.Item>
-          )}
-          loading={loading && initialLoad}
-          locale={{
-            emptyText: 'No players online',
-          }}
-        />
-      </ListWrapper>
-    </StyledCard>
+    <ListWrapper>
+      <List<string>
+        dataSource={players}
+        renderItem={(player: string) => (
+          <List.Item>
+            <PlayerItem>
+              <UserOutlined />
+              {player}
+            </PlayerItem>
+          </List.Item>
+        )}
+        loading={loading && initialLoad}
+        locale={{
+          emptyText: 'No players online',
+        }}
+      />
+    </ListWrapper>
   );
 }; 

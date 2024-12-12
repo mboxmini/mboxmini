@@ -1,7 +1,7 @@
 import React from "react";
 import { useShow, useNavigation } from "@refinedev/core";
 import { Show } from "@refinedev/antd";
-import { Card, Space, Button, Tag, message } from "antd";
+import { Card, Space, Button, Tag, message, Row, Col } from "antd";
 import { PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined } from "@ant-design/icons";
 import { Server } from "@/interfaces";
 import { startServer, stopServer } from "@/api/servers";
@@ -49,52 +49,57 @@ export const ServerShow: React.FC = () => {
 
   return (
     <Show isLoading={isLoading}>
-      <Space direction="vertical" style={{ width: "100%" }}>
-        <Card>
-          <Space style={{ width: "100%", justifyContent: "space-between" }}>
-            <Space direction="vertical">
-              <h2>{record?.name}</h2>
-              <Tag color={getStatusColor(record?.status || "")}>
-                {record?.status?.toUpperCase()}
-              </Tag>
-              <div>Version: {record?.version}</div>
-              <div>Address: localhost:{record?.port}</div>
-            </Space>
-            <Space>
-              <Button
-                type="text"
-                icon={<PlayCircleOutlined />}
-                onClick={handleStartServer}
-                disabled={
-                  record?.status === "running" || record?.status === "starting"
-                }
-              />
-              <Button
-                type="text"
-                icon={<PauseCircleOutlined />}
-                onClick={handleStopServer}
-                disabled={
-                  record?.status === "stopped" || record?.status === "stopping"
-                }
-              />
-              <Button
-                type="text"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => {}}
-              />
-            </Space>
+      <Row gutter={16}>
+        <Col flex="auto">
+          <Space direction="vertical" style={{ width: "100%" }}>
+            <Card>
+              <Space style={{ width: "100%", justifyContent: "space-between" }}>
+                <Space direction="vertical">
+                  <h2>{record?.name}</h2>
+                  <Tag color={getStatusColor(record?.status || "")}>
+                    {record?.status?.toUpperCase()}
+                  </Tag>
+                  <div>Version: {record?.version}</div>
+                  <div>Address: localhost:{record?.port}</div>
+                </Space>
+                <Space>
+                  <Button
+                    type="text"
+                    icon={<PlayCircleOutlined />}
+                    onClick={handleStartServer}
+                    disabled={
+                      record?.status === "running" || record?.status === "starting"
+                    }
+                  />
+                  <Button
+                    type="text"
+                    icon={<PauseCircleOutlined />}
+                    onClick={handleStopServer}
+                    disabled={
+                      record?.status === "stopped" || record?.status === "stopping"
+                    }
+                  />
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => {}}
+                  />
+                </Space>
+              </Space>
+            </Card>
+
+            <Card title="Console">
+              <Console serverId={record?.id || ""} />
+            </Card>
           </Space>
-        </Card>
-
-        <Card title="Console">
-          <Console serverId={record?.id || ""} />
-        </Card>
-
-        <Card title="Players">
-          <PlayerList serverId={record?.id || ""} />
-        </Card>
-      </Space>
+        </Col>
+        <Col flex="300px">
+          <Card title="Players" style={{ height: "100%" }}>
+            <PlayerList serverId={record?.id || ""} />
+          </Card>
+        </Col>
+      </Row>
     </Show>
   );
 }; 

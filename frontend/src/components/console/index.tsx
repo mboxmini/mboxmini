@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Input, Button } from 'antd';
+import { Input, Button, theme } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import { executeCommand } from '@/api/servers';
 import styled from 'styled-components';
@@ -11,8 +11,16 @@ const ConsoleContainer = styled.div`
 `;
 
 const ConsoleOutput = styled.div`
-  background: #f5f5f5;
-  border: 1px solid #d9d9d9;
+  background: ${() => {
+    const { useToken } = theme;
+    const { token } = useToken();
+    return token.colorBgContainer;
+  }};
+  border: 1px solid ${() => {
+    const { useToken } = theme;
+    const { token } = useToken();
+    return token.colorBorder;
+  }};
   border-radius: 4px;
   padding: 16px;
   min-height: 200px;
@@ -21,6 +29,11 @@ const ConsoleOutput = styled.div`
   font-family: monospace;
   white-space: pre-wrap;
   word-wrap: break-word;
+  color: ${() => {
+    const { useToken } = theme;
+    const { token } = useToken();
+    return token.colorText;
+  }};
 `;
 
 interface ConsoleEntryProps {
@@ -29,7 +42,11 @@ interface ConsoleEntryProps {
 
 const ConsoleEntry = styled.div<ConsoleEntryProps>`
   margin-bottom: 8px;
-  color: ${(props: ConsoleEntryProps) => (props.$isError ? '#ff4d4f' : 'inherit')};
+  color: ${(props: ConsoleEntryProps) => {
+    const { useToken } = theme;
+    const { token } = useToken();
+    return props.$isError ? token.colorError : token.colorText;
+  }};
 `;
 
 const InputContainer = styled.div`
