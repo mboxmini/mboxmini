@@ -216,8 +216,8 @@ setup_service() {
     print_info "Setting up auto-start service..."
     if [[ "$OS" == "macos" ]]; then
         # Create a launch agent for macOS
-        PLIST_FILE="$HOME/Library/LaunchAgents/com.mboxmini.app.plist"
-        mkdir -p "$HOME/Library/LaunchAgents"
+        PLIST_FILE="$REAL_HOME/Library/LaunchAgents/com.mboxmini.app.plist"
+        mkdir -p "$REAL_HOME/Library/LaunchAgents"
         cat > "$PLIST_FILE" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -275,6 +275,9 @@ PLIST
             -e "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|g" \
             "$PLIST_FILE"
         chmod 644 "$PLIST_FILE"
+        if [ "$SUDO_USER" ]; then
+            chown "$SUDO_USER:$(id -gn "$SUDO_USER")" "$PLIST_FILE"
+        fi
         launchctl load "$PLIST_FILE"
     else
         # Create systemd service for Linux
@@ -294,7 +297,7 @@ EnvironmentFile=${INSTALL_DIR}/.env
 Environment=COMPOSE_PROJECT_NAME=mboxmini
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
-User=${DEFAULT_USER}
+User=${SUDO_USER:-$DEFAULT_USER}
 
 [Install]
 WantedBy=multi-user.target
@@ -315,7 +318,7 @@ EnvironmentFile=${INSTALL_DIR}/.env
 Environment=COMPOSE_PROJECT_NAME=mboxmini
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
-User=${DEFAULT_USER}
+User=${SUDO_USER:-$DEFAULT_USER}
 
 [Install]
 WantedBy=multi-user.target
@@ -354,7 +357,7 @@ setup_snap_docker_access() {
     if [[ "$DOCKER_IS_SNAP" == true ]]; then
         print_info "Setting up snap Docker access..."
         
-        # Create the bridge directory in home
+        # Create the bridge directory in real user's home
         mkdir -p "$DOCKER_COMPOSE_PATH"
         
         # Create a symbolic link for docker-compose.yml
@@ -374,6 +377,12 @@ setup_snap_docker_access() {
             rm "$DOCKER_COMPOSE_PATH/minecraft-data"
         fi
         ln -s "$INSTALL_DIR/minecraft-data" "$DOCKER_COMPOSE_PATH/minecraft-data"
+        
+        # Set proper ownership
+        if [ "$SUDO_USER" ]; then
+            chown -R "$SUDO_USER:$(id -gn "$SUDO_USER")" "$DOCKER_COMPOSE_PATH"
+            chown -h "$SUDO_USER:$(id -gn "$SUDO_USER")" "$DOCKER_COMPOSE_PATH"/*
+        fi
         
         print_info "Created bridge directory at: $DOCKER_COMPOSE_PATH"
         print_info "Linked configuration files from: $INSTALL_DIR"
@@ -396,122 +405,6 @@ start_services() {
             print_error "Failed to start services. Check the logs with: cd $INSTALL_DIR && docker compose logs"
             exit 1
         fi
-    fi
-}
-
-# Modify the systemd service creation
-setup_service() {
-    print_info "Setting up auto-start service..."
-    if [[ "$OS" == "macos" ]]; then
-        # Create a launch agent for macOS
-        PLIST_FILE="$HOME/Library/LaunchAgents/com.mboxmini.app.plist"
-        mkdir -p "$HOME/Library/LaunchAgents"
-        cat > "$PLIST_FILE" << 'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.mboxmini.app</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/docker</string>
-        <string>compose</string>
-        <string>-f</string>
-        <string>__INSTALL_DIR__/docker-compose.yml</string>
-        <string>up</string>
-    </array>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>API_KEY</key>
-        <string>__API_KEY__</string>
-        <key>JWT_SECRET</key>
-        <string>__JWT_SECRET__</string>
-        <key>ADMIN_PASSWORD</key>
-        <string>__ADMIN_PASSWORD__</string>
-        <key>HOST_DATA_PATH</key>
-        <string>./minecraft-data</string>
-        <key>DATA_PATH</key>
-        <string>/minecraft-data</string>
-        <key>DB_PATH</key>
-        <string>/data/mboxmini.db</string>
-        <key>API_PORT</key>
-        <string>__API_PORT__</string>
-        <key>FRONTEND_PORT</key>
-        <string>__FRONTEND_PORT__</string>
-        <key>NODE_ENV</key>
-        <string>production</string>
-    </dict>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>WorkingDirectory</key>
-    <string>__INSTALL_DIR__</string>
-    <key>StandardOutPath</key>
-    <string>__INSTALL_DIR__/mboxmini.log</string>
-    <key>StandardErrorPath</key>
-    <string>__INSTALL_DIR__/mboxmini.error.log</string>
-</dict>
-</plist>
-PLIST
-        # Replace placeholders in plist file
-        sed -i \
-            -e "s|__INSTALL_DIR__|${INSTALL_DIR}|g" \
-            -e "s|__API_KEY__|${API_KEY}|g" \
-            -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
-            -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
-            -e "s|__API_PORT__|${API_PORT:-$DEFAULT_API_PORT}|g" \
-            -e "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|g" \
-            "$PLIST_FILE"
-        chmod 644 "$PLIST_FILE"
-        launchctl load "$PLIST_FILE"
-    else
-        # Create systemd service for Linux
-        if [[ "$DOCKER_IS_SNAP" == true ]]; then
-            # For snap Docker, use the bridge directory
-            cat > /etc/systemd/system/mboxmini.service << SERVICE
-[Unit]
-Description=MBoxMini Minecraft Server Manager
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=${DOCKER_COMPOSE_PATH}
-EnvironmentFile=${INSTALL_DIR}/.env
-Environment=COMPOSE_PROJECT_NAME=mboxmini
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-User=${DEFAULT_USER}
-
-[Install]
-WantedBy=multi-user.target
-SERVICE
-        else
-            # For non-snap Docker, use the installation directory
-            cat > /etc/systemd/system/mboxmini.service << SERVICE
-[Unit]
-Description=MBoxMini Minecraft Server Manager
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=${INSTALL_DIR}
-EnvironmentFile=${INSTALL_DIR}/.env
-Environment=COMPOSE_PROJECT_NAME=mboxmini
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-User=${DEFAULT_USER}
-
-[Install]
-WantedBy=multi-user.target
-SERVICE
-        fi
-        
-        systemctl daemon-reload
-        systemctl enable mboxmini.service
     fi
 }
 
