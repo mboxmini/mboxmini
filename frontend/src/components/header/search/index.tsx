@@ -2,14 +2,13 @@ import { useState } from "react";
 import { SearchOutlined } from "@ant-design/icons";
 import { AutoComplete, Flex, Input, Typography, Tag } from "antd";
 import { useList, useNavigation } from "@refinedev/core";
-import { Link } from "react-router-dom";
 import { Server } from "@/interfaces";
 import { useStyles } from "./styled";
 
 export const Search = () => {
   const [searchText, setSearchText] = useState<string>("");
   const { styles } = useStyles();
-  const { show } = useNavigation();
+  const { push } = useNavigation();
 
   const { data } = useList<Server>({
     resource: "servers",
@@ -17,16 +16,16 @@ export const Search = () => {
       current: 1,
       pageSize: 999,
     },
-    filters: [
-      {
-        field: "name",
-        operator: "contains",
-        value: searchText,
-      },
-    ],
   });
 
   const servers = data?.data || [];
+  
+  // Filter servers based on search text
+  const filteredServers = searchText
+    ? servers.filter(server => 
+        server.name.toLowerCase().includes(searchText.toLowerCase())
+      )
+    : [];
 
   return (
     <AutoComplete
@@ -35,24 +34,29 @@ export const Search = () => {
         maxWidth: "360px",
       }}
       filterOption={false}
-      options={servers.map(server => ({
+      options={filteredServers.map(server => ({
         value: server.id,
         label: server.name,
         data: server,
       }))}
       value={searchText}
       onChange={(text) => setSearchText(text)}
+      onSelect={(value) => {
+        const server = servers.find(s => s.id === value);
+        if (server) {
+          push(`/servers/${server.id}`);
+          setSearchText(""); // Clear search after selection
+        }
+      }}
       optionRender={(option) => {
         const server = (option.data as { data: Server }).data;
         return (
-          <Link to={`/servers/${server.id}`}>
-            <Flex align="center" gap={8}>
-              <Typography.Text>{server.name}</Typography.Text>
-              <Tag color={server.status === "running" ? "green" : "red"}>
-                {server.status.toUpperCase()}
-              </Tag>
-            </Flex>
-          </Link>
+          <Flex align="center" gap={8}>
+            <Typography.Text strong>{server.name}</Typography.Text>
+            <Tag color={server.status === "running" ? "green" : "red"}>
+              {server.status.toUpperCase()}
+            </Tag>
+          </Flex>
         );
       }}
     >
@@ -61,6 +65,7 @@ export const Search = () => {
         placeholder="Search servers"
         suffix={<div className={styles.inputSuffix}>/</div>}
         prefix={<SearchOutlined className={styles.inputPrefix} />}
+        allowClear
       />
     </AutoComplete>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useList, useNavigation, useInvalidate } from "@refinedev/core";
-import { List as AntdList, Table, Space, Button, Tag, message, Row, Col, Modal, Checkbox, Typography } from "antd";
+import { List as AntdList, Table, Space, Button, Tag, message, Row, Col, Modal, Checkbox, Typography, theme } from "antd";
 import { 
   PlayCircleOutlined, 
   PauseCircleOutlined, 
@@ -40,6 +40,7 @@ export const ServerList: React.FC = () => {
   const { push } = useNavigation();
   const [actionLoading, setActionLoading] = useState<Record<string, string | null>>({});
   const [deleteFiles, setDeleteFiles] = useState(false);
+  const { token } = theme.useToken();
 
   // Auto-refresh scheduler
   useEffect(() => {
@@ -147,7 +148,13 @@ export const ServerList: React.FC = () => {
     {
       title: "Address",
       key: "address",
-      render: (_: any, record: Server) => `localhost:${record.port}`,
+      render: (_: any, record: Server) => (
+        <span style={{ 
+          color: record.status === "running" ? 'inherit' : token.colorTextDisabled 
+        }}>
+          localhost:{record.port}
+        </span>
+      ),
     },
     {
       title: "Players",

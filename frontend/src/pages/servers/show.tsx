@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useShow, useNavigation } from "@refinedev/core";
 import { Show } from "@refinedev/antd";
-import { Card, Space, Button, Tag, message, Row, Col, Divider, Modal, Checkbox, Tooltip } from "antd";
+import { Card, Space, Button, Tag, message, Row, Col, Divider, Modal, Checkbox, Tooltip, theme } from "antd";
 import { PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined, LoadingOutlined, ExclamationCircleOutlined, CopyOutlined } from "@ant-design/icons";
 import { Server } from "@/interfaces";
 import { startServer, stopServer, deleteServer } from "@/api/servers";
@@ -15,6 +15,7 @@ export const ServerShow: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteFiles, setDeleteFiles] = useState(false);
   const { push } = useNavigation();
+  const { token } = theme.useToken();
 
   // Auto-refresh scheduler
   useEffect(() => {
@@ -126,12 +127,17 @@ export const ServerShow: React.FC = () => {
                   <div style={{ textAlign: 'right' }}>
                     <div>Version: {record?.version}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-                      <span>Address: localhost:{record?.port}</span>
-                      <Tooltip title="Copy address">
+                      <span style={{ 
+                        color: record?.status === "running" ? 'inherit' : token.colorTextDisabled 
+                      }}>
+                        Address: localhost:{record?.port}
+                      </span>
+                      <Tooltip title={record?.status === "running" ? "Copy address" : "Server is not running"}>
                         <Button
                           type="text"
                           icon={<CopyOutlined />}
                           size="small"
+                          disabled={record?.status !== "running"}
                           onClick={() => {
                             navigator.clipboard.writeText(`localhost:${record?.port}`);
                             message.success('Address copied to clipboard');
