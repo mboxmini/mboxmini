@@ -129,4 +129,43 @@ func (db *DB) UpdateUserAPIKey(userID int64) (string, error) {
     }
 
     return apiKey, nil
+}
+
+func (db *DB) DeleteUser(id int64) error {
+	result, err := db.Exec("DELETE FROM users WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+func (db *DB) ListUsers() ([]User, error) {
+	rows, err := db.Query("SELECT id, username, api_key, created_at, last_login FROM users")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var user User
+		var lastLogin sql.NullTime
+		if err := rows.Scan(&user.ID, &user.Username, &user.APIKey, &user.CreatedAt, &lastLogin); err != nil {
+			return nil, err
+		}
+		if lastLogin.Valid {
+			user.LastLogin = &lastLogin.Time
+		}
+		users = append(users, user)
+	}
+	return users, nil
 } 
