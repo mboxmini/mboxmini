@@ -10,6 +10,22 @@ import { IconMoon, IconSun } from "@/components/icons";
 import { User } from "@/components/header/user";
 import { Logo } from "@/components/logo";
 import { useStyles } from "./styled";
+import styled from "styled-components";
+
+const ServerSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.2s ease;
+  
+  &:hover {
+    color: ${() => {
+      const { useToken } = theme;
+      const { token } = useToken();
+      return token.colorPrimary;
+    }};
+  }
+`;
 
 export const Header: React.FC<RefineThemedLayoutV2HeaderProps> = () => {
   const { list } = useNavigation();
@@ -39,13 +55,12 @@ export const Header: React.FC<RefineThemedLayoutV2HeaderProps> = () => {
           height: "100%",
         }}
       >
-        <Flex align="center" wrap="wrap">
+        <Flex align="center" wrap="wrap" gap={16}>
           <Link
-            to="/servers"
+            to="/"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
               color: "inherit",
               textDecoration: "none",
             }}
@@ -55,7 +70,20 @@ export const Header: React.FC<RefineThemedLayoutV2HeaderProps> = () => {
                 width: "200px",
               }}
             />
-            <CloudServerOutlined style={{ fontSize: "24px" }} />
+          </Link>
+          <Link
+            to="/servers"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              color: "inherit",
+              textDecoration: "none",
+            }}
+          >
+            <ServerSection>
+              <CloudServerOutlined style={{ fontSize: "24px" }} />
+              <span style={{ fontSize: "16px" }}>Servers</span>
+            </ServerSection>
           </Link>
         </Flex>
         <Flex align="center" gap={32} className={styles.rightSlot}>

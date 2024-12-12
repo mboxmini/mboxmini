@@ -8,7 +8,7 @@ const ConsoleContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: 600px;
+  height: 500px;
   min-height: 300px;
 `;
 
