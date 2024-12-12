@@ -43,7 +43,15 @@ The script will:
 - 🚀 Start the application
 - 🔧 Configure auto-start on boot
 
-### Manual Installation
+To update to the latest version, simply run the same script again:
+```bash
+./scripts/easy-install.sh
+```
+The script will detect the existing installation and offer to update to the latest version.
+
+### Manual Installation (Pre-built Images)
+
+If you prefer to install manually using pre-built images:
 
 1. Clone the repository:
 ```bash
@@ -58,35 +66,49 @@ chmod +x scripts/setup.sh
 ```
 
 This will:
-- 🔑 Generate a secure API key
+- 🔑 Generate secure API key and JWT secret
+- 👤 Create initial admin user
 - ⚙️ Create environment configuration
-- 📦 Install backend dependencies
-- 🎨 Install frontend dependencies
 - 📁 Set up necessary directories
-
-3. Start the services:
-```bash
-docker-compose up -d
-```
+- 🚀 Start all services
 
 Your server will be available at:
 - 🎮 Minecraft Server: `localhost:25565`
+- 🌐 Web Interface: `http://localhost:3000`
 - 📊 Management API: `http://localhost:8080`
+
+### Development Setup (Local Build)
+
+For development or customization:
+
+1. Clone and enter the repository:
+```bash
+git clone https://github.com/mboxmini/mboxmini.git
+cd mboxmini
+```
+
+2. Run the setup script with build configuration:
+```bash
+chmod +x scripts/setup.sh
+./scripts/setup.sh
+```
+
+3. The script will:
+- 🔨 Build both frontend and backend from source
+- 🔑 Generate necessary secrets
+- 👤 Create admin user
+- 🚀 Start all services
 
 ## ⚙️ Configuration
 
-Environment variables are automatically configured during setup in:
-- `scripts/config/mac.env` - macOS configuration
-- `scripts/config/linux.env` - Linux configuration
-- `scripts/config/windows.env` - Windows configuration
-
-Key configuration options:
+Environment variables are configured in `.env` file during setup. Key configuration options:
 - `API_KEY` - Authentication key for API access (auto-generated)
+- `JWT_SECRET` - Secret for JWT token generation (auto-generated)
+- `HOST_DATA_PATH` - Path for Minecraft server data
 - `MINECRAFT_PORT` - Minecraft server port (default: 25565)
 - `API_PORT` - API server port (default: 8080)
-- `MAX_MEMORY` - Maximum memory allocation (default: 2G)
 
-## 💻 Development Setup
+## 💻 Development
 
 ### Prerequisites
 - 🐳 Docker and Docker Compose
@@ -112,17 +134,19 @@ npm start
 Common operations:
 ```bash
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop services
-docker-compose down
+docker compose down
 
 # Restart services
-docker-compose restart
+docker compose restart
 
-# Update and rebuild
-docker-compose pull
-docker-compose up -d --build
+# Build and start (development)
+docker compose -f docker-compose.build.yml up --build
+
+# Start pre-built images
+docker compose up -d
 ```
 
 ## 🔧 API Documentation

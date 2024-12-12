@@ -1,157 +1,161 @@
 #!/bin/bash
 
-# Generate secrets if they don't exist
-generate_secrets() {
-    # Always generate new secrets for fresh setup
-    API_KEY=$(openssl rand -hex 32)
-    JWT_SECRET=$(openssl rand -hex 32)
-    
-    echo "Generated new API key: $API_KEY"
-    echo "Generated new JWT secret: $JWT_SECRET"
-    
-    # Export the variables so they're available to docker-compose
-    export API_KEY
-    export JWT_SECRET
+# Exit on error
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Print with color
+print_status() {
+    echo -e "${GREEN}==>${NC} $1"
 }
 
-# Create initial admin user
+print_warning() {
+    echo -e "${YELLOW}Warning:${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}Error:${NC} $1"
+}
+
+# Check if Docker is installed and running
+check_docker() {
+    print_status "Checking Docker installation..."
+    if ! command -v docker &> /dev/null; then
+        print_error "Docker is not installed. Please install Docker first."
+        exit 1
+    fi
+
+    if ! docker info &> /dev/null; then
+        print_error "Docker daemon is not running. Please start Docker first."
+        exit 1
+    fi
+}
+
+# Check if docker-compose is installed
+check_docker_compose() {
+    print_status "Checking Docker Compose installation..."
+    if ! command -v docker compose &> /dev/null; then
+        print_error "Docker Compose is not installed. Please install Docker Compose first."
+        exit 1
+    fi
+}
+
+# Generate random strings for secrets
+generate_secrets() {
+    print_status "Generating secrets..."
+    API_KEY=$(openssl rand -hex 32)
+    JWT_SECRET=$(openssl rand -hex 32)
+    ADMIN_PASSWORD=$(openssl rand -base64 12)
+}
+
+# Create environment file
+create_env_file() {
+    print_status "Creating environment file..."
+    if [ -f .env ]; then
+        print_warning "Environment file already exists. Backing up to .env.backup"
+        cp .env .env.backup
+    fi
+
+    cat > .env << EOF
+API_KEY=${API_KEY}
+JWT_SECRET=${JWT_SECRET}
+HOST_DATA_PATH=./minecraft-data
+EOF
+}
+
+# Create necessary directories
+create_directories() {
+    print_status "Creating necessary directories..."
+    mkdir -p data minecraft-data
+    chmod 777 data minecraft-data
+}
+
+# Build and start services
+start_services() {
+    print_status "Building and starting services..."
+    docker compose -f docker-compose.build.yml up --build -d
+
+    print_status "Waiting for services to be ready..."
+    sleep 10
+
+    # Check if services are running
+    if ! docker compose -f docker-compose.build.yml ps | grep -q "Up"; then
+        print_error "Services failed to start. Check docker-compose logs for details."
+        docker compose -f docker-compose.build.yml logs
+        exit 1
+    fi
+}
+
+# Create admin user
 create_admin_user() {
-    local username="admin@admin.localhost"
-    local password=$(openssl rand -hex 8)  # Generate random 8-character password
-    
-    echo "Creating initial admin user..."
-    echo "Username: $username"
-    echo "Password: $password"
-    
-    # Store credentials in a secure file
-    echo "Admin Credentials" > admin_credentials.txt
-    echo "Username: $username" >> admin_credentials.txt
-    echo "Password: $password" >> admin_credentials.txt
-    chmod 600 admin_credentials.txt
-    
-    # Wait for the API to be ready and create the user
-    echo "Waiting for API to be ready to create admin user..."
-    for i in {1..30}; do
+    print_status "Creating admin user..."
+    local max_retries=30
+    local retry_count=0
+    local admin_email="admin@mboxmini.local"
+
+    while [ $retry_count -lt $max_retries ]; do
         if curl -s http://localhost:8080/health > /dev/null; then
-            curl -X POST http://localhost:8080/api/auth/register \
+            print_status "API is ready, creating admin user..."
+            
+            # Try to create admin user
+            if curl -s -X POST http://localhost:8080/api/auth/register \
                 -H "Content-Type: application/json" \
-                -d "{\"username\":\"$username\",\"password\":\"$password\"}"
-            echo "Admin user created successfully!"
-            break
+                -d "{\"username\":\"$admin_email\",\"password\":\"$ADMIN_PASSWORD\"}" > /dev/null; then
+                
+                # Save credentials to file
+                cat > admin_credentials.txt << EOF
+Admin Credentials
+----------------
+Email: $admin_email
+Password: $ADMIN_PASSWORD
+API Key: $API_KEY
+EOF
+                chmod 600 admin_credentials.txt
+                return 0
+            fi
+            print_error "Failed to create admin user. API returned an error."
+            return 1
         fi
-        echo "Waiting for API... ($i/30)"
+        
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -eq $max_retries ]; then
+            print_error "Timeout waiting for API to become ready"
+            return 1
+        fi
+        
+        echo -n "."
         sleep 1
     done
 }
 
-# Get absolute path for minecraft-data
-HOST_DATA_PATH="$(pwd)/minecraft-data"
-mkdir -p "$HOST_DATA_PATH"
-
-# Create environment files from template
-create_env_files() {
-    local backend_env="$1"
-    local frontend_env="frontend/.env"
-    local template="scripts/config/template.env"
-
-    # Read template
-    if [ ! -f "$template" ]; then
-        echo "Error: Template file not found at $template"
-        exit 1
-    fi
-
-    # Create backend environment file
-    echo "Creating backend environment file: $backend_env"
-    sed -e "s|{{API_KEY}}|$API_KEY|g" \
-        -e "s|{{JWT_SECRET}}|$JWT_SECRET|g" \
-        -e "s|{{HOST_DATA_PATH}}|$HOST_DATA_PATH|g" \
-        -e "s|{{API_PORT}}|8080|g" \
-        -e "s|{{MINECRAFT_PORT}}|25565|g" \
-        "$template" > "$backend_env"
-    chmod 600 "$backend_env"
-
-    # Create frontend environment file
-    echo "Creating frontend environment file: $frontend_env"
-    grep "^REACT_APP_" "$template" | \
-    sed -e "s|{{API_KEY}}|$API_KEY|g" \
-        -e "s|{{API_PORT}}|8080|g" \
-        -e "s|{{MINECRAFT_PORT}}|25565|g" \
-        > "$frontend_env"
-    chmod 600 "$frontend_env"
-}
-
-# Initialize frontend
-init_frontend() {
-    echo "Initializing frontend..."
-    mkdir -p frontend/public frontend/src
-}
-
-# Setup development environment
-setup_dev() {
-    echo "Setting up development environment..."
-    
-    # Create necessary directories
-    mkdir -p logs minecraft-data
-
-    # Install backend dependencies
-    echo "Installing backend dependencies..."
-    cd backend && go mod download && cd ..
-    
-    # Initialize and install frontend dependencies
-    echo "Installing frontend dependencies..."
-    init_frontend
-    cd frontend && npm install && cd ..
-}
-
 # Main setup process
-echo "Starting MboxMini setup..."
+main() {
+    print_status "Starting MboxMini setup..."
 
-# Create necessary directories
-mkdir -p scripts/config
+    check_docker
+    check_docker_compose
+    generate_secrets
+    create_env_file
+    create_directories
+    start_services
+    create_admin_user
 
-# Generate secrets and export them
-generate_secrets
+    print_status "Setup completed successfully!"
+    echo -e "\nMboxMini is now running!"
+    echo -e "Frontend URL: ${GREEN}http://localhost:3000${NC}"
+    echo -e "Backend URL: ${GREEN}http://localhost:8080${NC}"
+    echo -e "\nAdmin credentials have been saved to: ${YELLOW}admin_credentials.txt${NC}"
+    echo -e "Login with:"
+    echo -e "Email: ${GREEN}admin@mboxmini.local${NC}"
+    echo -e "Password: ${GREEN}${ADMIN_PASSWORD}${NC}"
+    echo -e "\nTo view logs, run: ${YELLOW}docker compose -f docker-compose.build.yml logs -f${NC}"
+    echo -e "To stop services, run: ${YELLOW}docker compose -f docker-compose.build.yml down${NC}"
+}
 
-# Setup development environment
-setup_dev
-
-# Create platform-specific configs
-case "$OSTYPE" in
-    darwin*)  
-        echo "Detected macOS"
-        create_env_files "./scripts/config/mac.env"
-        ;;
-    linux*)   
-        echo "Detected Linux"
-        create_env_files "./scripts/config/linux.env"
-        ;;
-    msys*|cygwin*|mingw*)  
-        echo "Detected Windows"
-        create_env_files "./scripts/config/windows.env"
-        ;;
-    *) 
-        echo "Unknown platform: $OSTYPE" 
-        exit 1 
-        ;;
-esac
-
-# Verify environment variables are set
-if [ -z "$JWT_SECRET" ]; then
-    echo "Error: JWT_SECRET is not set!"
-    exit 1
-fi
-
-if [ -z "$API_KEY" ]; then
-    echo "Error: API_KEY is not set!"
-    exit 1
-fi
-
-# Start services to create admin user
-echo "Starting services to create admin user..."
-docker-compose up -d
-
-# Create admin user
-create_admin_user
-
-echo "Setup completed successfully!"
-echo "Admin credentials have been saved to admin_credentials.txt" 
+# Run main function
+main

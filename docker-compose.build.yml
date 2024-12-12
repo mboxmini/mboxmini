@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   ui:
-    image: intecco/mboxmini-ui:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -12,7 +14,9 @@ services:
         condition: service_healthy
 
   api:
-    image: intecco/mboxmini-api:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     volumes:
@@ -42,4 +46,4 @@ services:
     pull_policy: always
 
 volumes:
-  mboxmini-data:
+  mboxmini-data: 

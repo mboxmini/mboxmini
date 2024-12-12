@@ -10,30 +10,29 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Detect OS
-OS="unknown"
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    OS="macos"
-elif [[ -f /etc/debian_version ]]; then
-    OS="debian"
-elif [[ -f /etc/redhat-release ]]; then
-    OS="redhat"
-else
-    OS="linux"
-fi
-
-# Default values based on OS
-if [[ "$OS" == "macos" ]]; then
-    DEFAULT_USER="$USER"
-    DEFAULT_DIR="$HOME/mboxmini"
-    NEED_SUDO=false
-else
-    DEFAULT_USER="mboxmini"
-    DEFAULT_DIR="/app/mboxmini"
-    NEED_SUDO=true
-fi
-
-DEFAULT_PORT_FRONTEND="5173"
-DEFAULT_PORT_BACKEND="8080"
+detect_os() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        OS="macos"
+        DEFAULT_USER="$USER"
+        DEFAULT_DIR="$HOME/mboxmini"
+        NEED_SUDO=false
+    elif [[ -f /etc/debian_version ]]; then
+        OS="debian"
+        DEFAULT_USER="mboxmini"
+        DEFAULT_DIR="/opt/mboxmini"
+        NEED_SUDO=true
+    elif [[ -f /etc/redhat-release ]]; then
+        OS="redhat"
+        DEFAULT_USER="mboxmini"
+        DEFAULT_DIR="/opt/mboxmini"
+        NEED_SUDO=true
+    else
+        OS="linux"
+        DEFAULT_USER="mboxmini"
+        DEFAULT_DIR="/opt/mboxmini"
+        NEED_SUDO=true
+    fi
+}
 
 # Print with color
 print_info() {
@@ -48,162 +47,121 @@ print_error() {
     echo -e "${RED}ERROR: $1${NC}"
 }
 
-# Check if we need sudo
-if [[ "$NEED_SUDO" == true && "$EUID" -ne 0 ]]; then
-    print_error "Please run this script with sudo:"
-    echo "sudo bash $0"
-    exit 1
-fi
+# Check if Docker is installed and running
+check_docker() {
+    print_info "Checking Docker installation..."
+    if ! command -v docker &> /dev/null; then
+        print_error "Docker is not installed. Please install Docker first."
+        if [[ "$OS" == "macos" ]]; then
+            echo "Visit https://docs.docker.com/desktop/mac/install/ for installation instructions."
+        else
+            echo "Visit https://docs.docker.com/engine/install/ for installation instructions."
+        fi
+        exit 1
+    fi
 
-# Check prerequisites
-print_info "Checking prerequisites..."
+    if ! docker info &> /dev/null; then
+        print_error "Docker daemon is not running. Please start Docker first."
+        exit 1
+    fi
+}
 
-if ! command -v docker &> /dev/null; then
-    print_error "Docker is not installed. Please install Docker first."
-    if [[ "$OS" == "macos" ]]; then
-        echo "Visit https://docs.docker.com/desktop/mac/install/ for installation instructions."
+# Check if docker-compose is installed
+check_docker_compose() {
+    print_info "Checking Docker Compose installation..."
+    if ! command -v docker compose &> /dev/null; then
+        print_error "Docker Compose is not installed. Please install Docker Compose first."
+        echo "Visit https://docs.docker.com/compose/install/ for installation instructions."
+        exit 1
+    fi
+}
+
+# Check if MboxMini is already installed
+check_installation() {
+    if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+        return 0
     else
-        echo "Visit https://docs.docker.com/engine/install/ for installation instructions."
+        return 1
     fi
-    exit 1
-fi
+}
 
-if ! command -v docker compose &> /dev/null; then
-    print_error "Docker Compose is not installed. Please install Docker Compose first."
-    echo "Visit https://docs.docker.com/compose/install/ for installation instructions."
-    exit 1
-fi
+# Pull latest images
+update_images() {
+    print_info "Pulling latest images..."
+    cd "$INSTALL_DIR"
+    docker compose pull
+    
+    print_info "Restarting services with new images..."
+    docker compose down
+    docker compose up -d
+    
+    print_info "Update completed successfully!"
+}
 
-# Interactive configuration
-echo
-print_info "Starting MBoxMini installation on ${OS}..."
-echo
-
-# Ask for configuration values
-read -p "Enter the user to run MBoxMini [$DEFAULT_USER]: " MBOX_USER
-MBOX_USER=${MBOX_USER:-$DEFAULT_USER}
-
-read -p "Enter the installation directory [$DEFAULT_DIR]: " INSTALL_DIR
-INSTALL_DIR=${INSTALL_DIR:-$DEFAULT_DIR}
-
-read -p "Enter the frontend port [$DEFAULT_PORT_FRONTEND]: " PORT_FRONTEND
-PORT_FRONTEND=${PORT_FRONTEND:-$DEFAULT_PORT_FRONTEND}
-
-read -p "Enter the backend port [$DEFAULT_PORT_BACKEND]: " PORT_BACKEND
-PORT_BACKEND=${PORT_BACKEND:-$DEFAULT_PORT_BACKEND}
-
-# Generate a secure JWT secret
-if [[ "$OS" == "macos" ]]; then
-    JWT_SECRET=$(openssl rand -base64 32)
-else
-    JWT_SECRET=$(tr -dc 'A-Za-z0-9!"#$%&'\''()*+,-./:;<=>?@[\]^_`{|}~' </dev/urandom | head -c 32)
-fi
-
-# Create system user if needed (Linux only)
-if [[ "$OS" != "macos" && "$MBOX_USER" != "$USER" ]]; then
-    if ! id "$MBOX_USER" &>/dev/null; then
-        print_info "Creating system user $MBOX_USER..."
-        useradd -r -s /bin/false "$MBOX_USER"
+# Generate secrets
+generate_secrets() {
+    print_info "Generating secrets..."
+    if [[ "$OS" == "macos" ]]; then
+        API_KEY=$(openssl rand -hex 32)
+        JWT_SECRET=$(openssl rand -base64 32)
+    else
+        API_KEY=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
+        JWT_SECRET=$(tr -dc 'A-Za-z0-9!"#$%&'\''()*+,-./:;<=>?@[\]^_`{|}~' < /dev/urandom | head -c 32)
     fi
-fi
+}
 
-# Create and secure installation directory
-print_info "Setting up installation directory..."
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$INSTALL_DIR/data"
-mkdir -p "$INSTALL_DIR/minecraft-data"
+# Create environment file
+create_env_file() {
+    print_info "Creating environment file..."
+    if [ -f "$INSTALL_DIR/.env" ]; then
+        print_warning "Environment file already exists. Backing up to .env.backup"
+        cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.backup"
+    fi
 
-# Create docker-compose.yml
-print_info "Creating configuration files..."
-cat > "$INSTALL_DIR/docker-compose.yml" << EOL
-version: '3.8'
-
-services:
-  frontend:
-    image: ghcr.io/mboxmini/frontend:latest
-    ports:
-      - "${PORT_FRONTEND}:5173"
-    environment:
-      - API_URL=http://localhost:${PORT_BACKEND}
-      - NODE_ENV=production
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  backend:
-    image: ghcr.io/mboxmini/backend:latest
-    ports:
-      - "${PORT_BACKEND}:8080"
-    environment:
-      - JWT_SECRET=${JWT_SECRET}
-      - DATA_PATH=/minecraft-data
-      - DB_PATH=/data/mboxmini.db
-      - API_PORT=${PORT_BACKEND}
-      - FRONTEND_URL=http://localhost:${PORT_FRONTEND}
-      - NODE_ENV=production
-    volumes:
-      - ./data:/data
-      - ./minecraft-data:/minecraft-data
-    depends_on:
-      - db
-    restart: unless-stopped
-
-  db:
-    image: sqlite:latest
-    volumes:
-      - ./data:/data
-    restart: unless-stopped
-EOL
-
-# Create .env file with configuration
-cat > "$INSTALL_DIR/.env" << EOL
-# Security
+    cat > "$INSTALL_DIR/.env" << EOF
+API_KEY=${API_KEY}
 JWT_SECRET=${JWT_SECRET}
+HOST_DATA_PATH=./minecraft-data
+EOF
+}
 
-# Paths
-DATA_PATH=/minecraft-data
-DB_PATH=/data/mboxmini.db
+# Create necessary directories
+create_directories() {
+    print_info "Creating necessary directories..."
+    mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/minecraft-data"
+    
+    # Set appropriate permissions based on OS
+    if [[ "$OS" == "macos" ]]; then
+        chown -R "$USER" "$INSTALL_DIR"
+        chmod 755 "$INSTALL_DIR"
+        chmod 755 "$INSTALL_DIR/data"
+        chmod 755 "$INSTALL_DIR/minecraft-data"
+    else
+        chown -R "$DEFAULT_USER:$DEFAULT_USER" "$INSTALL_DIR"
+        chmod 755 "$INSTALL_DIR"
+        chmod 755 "$INSTALL_DIR/data"
+        chmod 755 "$INSTALL_DIR/minecraft-data"
+    fi
+}
 
-# Server Configuration
-API_PORT=${PORT_BACKEND}
-FRONTEND_URL=http://localhost:${PORT_FRONTEND}
-NODE_ENV=production
+# Create system user (Linux only)
+create_system_user() {
+    if [[ "$OS" != "macos" ]]; then
+        if ! id "$DEFAULT_USER" &>/dev/null; then
+            print_info "Creating system user $DEFAULT_USER..."
+            useradd -r -s /bin/false "$DEFAULT_USER"
+        fi
+    fi
+}
 
-# Default Admin Credentials (change after first login)
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=admin123
-EOL
-
-# Set up proper permissions
-print_info "Setting up permissions..."
-if [[ "$OS" == "macos" ]]; then
-    chown -R "$MBOX_USER" "$INSTALL_DIR"
-    chmod 755 "$INSTALL_DIR"
-    chmod 755 "$INSTALL_DIR/data"
-    chmod 755 "$INSTALL_DIR/minecraft-data"
-else
-    chown -R "$MBOX_USER:$MBOX_USER" "$INSTALL_DIR"
-    chmod 755 "$INSTALL_DIR"
-    chmod 755 "$INSTALL_DIR/data"
-    chmod 755 "$INSTALL_DIR/minecraft-data"
-fi
-
-# Create and set permissions for SQLite database
-touch "$INSTALL_DIR/data/mboxmini.db"
-if [[ "$OS" == "macos" ]]; then
-    chown "$MBOX_USER" "$INSTALL_DIR/data/mboxmini.db"
-else
-    chown "$MBOX_USER:$MBOX_USER" "$INSTALL_DIR/data/mboxmini.db"
-fi
-chmod 644 "$INSTALL_DIR/data/mboxmini.db"
-
-# Create startup script
-print_info "Creating startup script..."
-if [[ "$OS" == "macos" ]]; then
-    # Create a launch agent for macOS
-    PLIST_FILE="$HOME/Library/LaunchAgents/com.mboxmini.app.plist"
-    mkdir -p "$HOME/Library/LaunchAgents"
-    cat > "$PLIST_FILE" << EOL
+# Setup auto-start service
+setup_service() {
+    print_info "Setting up auto-start service..."
+    if [[ "$OS" == "macos" ]]; then
+        # Create a launch agent for macOS
+        PLIST_FILE="$HOME/Library/LaunchAgents/com.mboxmini.app.plist"
+        mkdir -p "$HOME/Library/LaunchAgents"
+        cat > "$PLIST_FILE" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -228,12 +186,12 @@ if [[ "$OS" == "macos" ]]; then
     <string>${INSTALL_DIR}/mboxmini.error.log</string>
 </dict>
 </plist>
-EOL
-    chmod 644 "$PLIST_FILE"
-    launchctl load "$PLIST_FILE"
-else
-    # Create systemd service for Linux
-    cat > /etc/systemd/system/mboxmini.service << EOL
+EOF
+        chmod 644 "$PLIST_FILE"
+        launchctl load "$PLIST_FILE"
+    else
+        # Create systemd service for Linux
+        cat > /etc/systemd/system/mboxmini.service << EOF
 [Unit]
 Description=MBoxMini Minecraft Server Manager
 After=docker.service
@@ -245,90 +203,95 @@ RemainAfterExit=yes
 WorkingDirectory=${INSTALL_DIR}
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
-User=${MBOX_USER}
+User=${DEFAULT_USER}
 
 [Install]
 WantedBy=multi-user.target
-EOL
-    systemctl daemon-reload
-    systemctl enable mboxmini.service
-fi
+EOF
+        systemctl daemon-reload
+        systemctl enable mboxmini.service
+    fi
+}
 
-# Pull Docker images
-print_info "Pulling Docker images..."
-cd "$INSTALL_DIR"
-docker compose pull
+# Install MboxMini
+install_mboxmini() {
+    print_info "Installing MboxMini..."
+    
+    # Create system user if needed
+    create_system_user
+    
+    # Create directories and files
+    create_directories
+    generate_secrets
+    create_env_file
+    
+    # Copy docker-compose file
+    cp docker-compose.yml "$INSTALL_DIR/"
+    
+    # Setup auto-start service
+    setup_service
+    
+    # Start services
+    cd "$INSTALL_DIR"
+    docker compose up -d
+    
+    print_info "Installation completed successfully!"
+    echo -e "\nMboxMini is now running!"
+    echo -e "Frontend URL: ${GREEN}http://localhost:3000${NC}"
+    echo -e "Backend URL: ${GREEN}http://localhost:8080${NC}"
+    echo -e "\nAdmin credentials have been saved to: ${YELLOW}admin_credentials.txt${NC}"
+    
+    # Print OS-specific management instructions
+    if [[ "$OS" == "macos" ]]; then
+        echo -e "\nTo manage the service:"
+        echo "launchctl start com.mboxmini.app   # Start the service"
+        echo "launchctl stop com.mboxmini.app    # Stop the service"
+        echo "launchctl unload ~/Library/LaunchAgents/com.mboxmini.app.plist  # Disable service"
+        echo "launchctl load ~/Library/LaunchAgents/com.mboxmini.app.plist    # Enable service"
+    else
+        echo -e "\nTo manage the service:"
+        echo "sudo systemctl start mboxmini   # Start the service"
+        echo "sudo systemctl stop mboxmini    # Stop the service"
+        echo "sudo systemctl restart mboxmini # Restart the service"
+        echo "sudo systemctl status mboxmini  # Check service status"
+    fi
+}
 
-# Start the application
-print_info "Starting MBoxMini..."
-if [[ "$OS" == "macos" ]]; then
-    launchctl start com.mboxmini.app
-else
-    systemctl start mboxmini.service
-fi
+# Main script
+main() {
+    # Detect OS and set defaults
+    detect_os
+    
+    # Check if we need sudo
+    if [[ "$NEED_SUDO" == true && "$EUID" -ne 0 ]]; then
+        print_error "Please run this script with sudo:"
+        echo "sudo $0"
+        exit 1
+    fi
+    
+    # Set installation directory
+    INSTALL_DIR="${1:-$DEFAULT_DIR}"
+    
+    print_info "Starting MBoxMini setup on ${OS}..."
+    
+    check_docker
+    check_docker_compose
+    
+    if check_installation; then
+        print_info "MboxMini is already installed in $INSTALL_DIR"
+        read -p "Would you like to update to the latest version? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            update_images
+        else
+            print_info "No changes made. Exiting..."
+            exit 0
+        fi
+    else
+        print_info "Installing MboxMini in $INSTALL_DIR"
+        install_mboxmini
+    fi
+}
 
-# Wait for services to be ready
-print_info "Waiting for services to start..."
-sleep 10
-
-# Print success message and generated credentials
-echo "
-${GREEN}Installation completed successfully!${NC}
-
-MBoxMini is now running at:
-- Frontend: http://localhost:${PORT_FRONTEND}
-- Backend API: http://localhost:${PORT_BACKEND}
-
-Default login credentials:
-Email: admin@example.com
-Password: admin123
-
-Your generated JWT_SECRET is: ${JWT_SECRET}
-(This is stored in your .env file at ${INSTALL_DIR}/.env)
-
-Please change the admin credentials after first login.
-
-System Configuration:
-- System User: ${MBOX_USER}
-- Install Directory: ${INSTALL_DIR}
-- OS Type: ${OS}
-"
-
-if [[ "$OS" == "macos" ]]; then
-    echo "To manage the service:
-launchctl start com.mboxmini.app   # Start the service
-launchctl stop com.mboxmini.app    # Stop the service
-launchctl unload ~/Library/LaunchAgents/com.mboxmini.app.plist  # Disable service
-launchctl load ~/Library/LaunchAgents/com.mboxmini.app.plist    # Enable service
-
-To view logs:
-tail -f ${INSTALL_DIR}/mboxmini.log         # Application logs
-tail -f ${INSTALL_DIR}/mboxmini.error.log   # Error logs"
-else
-    echo "To manage the service:
-sudo systemctl start mboxmini   # Start the service
-sudo systemctl stop mboxmini    # Stop the service
-sudo systemctl restart mboxmini # Restart the service
-sudo systemctl status mboxmini  # Check service status
-
-To view logs:
-sudo journalctl -u mboxmini -f  # Follow service logs"
-fi
-
-echo "
-To view container logs:
-cd ${INSTALL_DIR} && docker compose logs -f
-
-To update to the latest version:
-cd ${INSTALL_DIR} && docker compose pull && docker compose up -d
-
-Data Locations:
-- Application data: ${INSTALL_DIR}/data
-- Minecraft server data: ${INSTALL_DIR}/minecraft-data
-
-Security Note:
-- Directory permissions are set to 755
-- Database file permission is set to 644
-"
-
-print_info "Setup complete! Please save the above information for future reference." 
+# Run main function with provided installation directory or default
+main "$@" 
