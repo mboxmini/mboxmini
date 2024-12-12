@@ -278,7 +278,7 @@ PLIST
         launchctl load "$PLIST_FILE"
     else
         # Create systemd service for Linux
-        cat > /etc/systemd/system/mboxmini.service << 'SERVICE'
+        cat > /etc/systemd/system/mboxmini.service << SERVICE
 [Unit]
 Description=MBoxMini Minecraft Server Manager
 After=docker.service
@@ -290,8 +290,8 @@ RemainAfterExit=yes
 WorkingDirectory=__INSTALL_DIR__
 EnvironmentFile=__INSTALL_DIR__/.env
 Environment=COMPOSE_PROJECT_NAME=mboxmini
-ExecStart=/usr/bin/docker compose --env-file __INSTALL_DIR__/.env --project-directory __INSTALL_DIR__ up -d
-ExecStop=/usr/bin/docker compose --env-file __INSTALL_DIR__/.env --project-directory __INSTALL_DIR__ down
+ExecStart=/usr/bin/docker compose -f __INSTALL_DIR__/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -f __INSTALL_DIR__/docker-compose.yml down
 User=__DEFAULT_USER__
 
 [Install]
@@ -340,12 +340,35 @@ download_files() {
         exit 1
     fi
     
+    # Print file content for verification
+    print_info "Content of downloaded docker-compose.yml:"
+    cat "$TMP_DIR/docker-compose.yml"
+    
     # Move files to installation directory
     mv "$TMP_DIR/docker-compose.yml" "$INSTALL_DIR/"
     
-    # Verify the file was moved successfully
+    # Set proper permissions and ownership
+    chmod 644 "$INSTALL_DIR/docker-compose.yml"
+    if [[ "$OS" != "macos" ]]; then
+        chown "$DEFAULT_USER:$DEFAULT_USER" "$INSTALL_DIR/docker-compose.yml"
+    fi
+    
+    # Verify the file was moved successfully and is readable
     if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
         print_error "Failed to move docker-compose.yml to installation directory"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+    
+    if [ ! -r "$INSTALL_DIR/docker-compose.yml" ]; then
+        print_error "docker-compose.yml is not readable"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+    
+    # Verify docker-compose.yml syntax
+    if ! (cd "$INSTALL_DIR" && docker compose config --quiet); then
+        print_error "Invalid docker-compose.yml syntax"
         rm -rf "$TMP_DIR"
         exit 1
     fi
@@ -418,7 +441,7 @@ setup_docker_permissions() {
     fi
 }
 
-# Modify the install_mboxmini function to add more verification
+# Modify the install_mboxmini function to add verification before starting services
 install_mboxmini() {
     print_info "Installing MboxMini..."
     
@@ -452,8 +475,17 @@ install_mboxmini() {
     
     # Start services
     print_info "Starting services..."
+    print_info "Current directory contents:"
+    ls -la "$INSTALL_DIR"
+    
+    print_info "Verifying docker-compose.yml:"
+    cat "$INSTALL_DIR/docker-compose.yml"
+    
+    print_info "Verifying docker compose configuration:"
+    cd "$INSTALL_DIR" && docker compose config
+    
     # Use env file with docker compose and ensure we're in the right directory
-    if ! (cd "$INSTALL_DIR" && ls -la && pwd && docker compose config && docker compose up -d); then
+    if ! (cd "$INSTALL_DIR" && docker compose up -d); then
         print_error "Failed to start services. Check the logs with: cd ${INSTALL_DIR} && docker compose logs"
         exit 1
     fi

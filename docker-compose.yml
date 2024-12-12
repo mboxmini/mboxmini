@@ -46,3 +46,5 @@ services:
 
 volumes:
   mboxmini-data:
+    name: mboxmini-data
+    driver: local
