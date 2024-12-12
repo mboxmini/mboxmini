@@ -278,7 +278,9 @@ PLIST
         launchctl load "$PLIST_FILE"
     else
         # Create systemd service for Linux
-        cat > /etc/systemd/system/mboxmini.service << SERVICE
+        if [[ "$DOCKER_IS_SNAP" == true ]]; then
+            # For snap Docker, use the bridge directory
+            cat > /etc/systemd/system/mboxmini.service << SERVICE
 [Unit]
 Description=MBoxMini Minecraft Server Manager
 After=docker.service
@@ -287,21 +289,38 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=__INSTALL_DIR__
-EnvironmentFile=__INSTALL_DIR__/.env
+WorkingDirectory=${DOCKER_COMPOSE_PATH}
+EnvironmentFile=${INSTALL_DIR}/.env
 Environment=COMPOSE_PROJECT_NAME=mboxmini
-ExecStart=/usr/bin/docker compose -f __INSTALL_DIR__/docker-compose.yml up -d
-ExecStop=/usr/bin/docker compose -f __INSTALL_DIR__/docker-compose.yml down
-User=__DEFAULT_USER__
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=${DEFAULT_USER}
 
 [Install]
 WantedBy=multi-user.target
 SERVICE
-        # Replace placeholders in service file
-        sed -i \
-            -e "s|__INSTALL_DIR__|${INSTALL_DIR}|g" \
-            -e "s|__DEFAULT_USER__|${DEFAULT_USER}|g" \
-            "/etc/systemd/system/mboxmini.service"
+        else
+            # For non-snap Docker, use the installation directory
+            cat > /etc/systemd/system/mboxmini.service << SERVICE
+[Unit]
+Description=MBoxMini Minecraft Server Manager
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${INSTALL_DIR}/.env
+Environment=COMPOSE_PROJECT_NAME=mboxmini
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=${DEFAULT_USER}
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+        fi
         
         systemctl daemon-reload
         systemctl enable mboxmini.service
@@ -309,9 +328,7 @@ SERVICE
 }
 
 # Add to the top with other variables
-DEFAULT_BRANCH="main"
 DOCKER_IS_SNAP=false
-DOCKER_NEEDS_MIGRATION=false
 DOCKER_COMPOSE_PATH=""
 
 # Function to detect Docker installation type
@@ -382,7 +399,7 @@ start_services() {
     fi
 }
 
-# Modify the systemd service creation for snap Docker
+# Modify the systemd service creation
 setup_service() {
     print_info "Setting up auto-start service..."
     if [[ "$OS" == "macos" ]]; then
@@ -471,7 +488,26 @@ User=${DEFAULT_USER}
 WantedBy=multi-user.target
 SERVICE
         else
-            # ... existing systemd service setup for non-snap Docker ...
+            # For non-snap Docker, use the installation directory
+            cat > /etc/systemd/system/mboxmini.service << SERVICE
+[Unit]
+Description=MBoxMini Minecraft Server Manager
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${INSTALL_DIR}/.env
+Environment=COMPOSE_PROJECT_NAME=mboxmini
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=${DEFAULT_USER}
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
         fi
         
         systemctl daemon-reload
