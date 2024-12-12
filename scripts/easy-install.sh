@@ -120,10 +120,11 @@ create_env_file() {
         cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.backup"
     fi
 
+    # Create environment file template
     cat > "$INSTALL_DIR/.env" << 'ENVFILE'
 # Security
-API_KEY=${API_KEY}
-JWT_SECRET=${JWT_SECRET}
+API_KEY=__API_KEY__
+JWT_SECRET=__JWT_SECRET__
 
 # Paths
 HOST_DATA_PATH=./minecraft-data
@@ -137,36 +138,34 @@ NODE_ENV=production
 
 # Admin Credentials
 ADMIN_EMAIL=admin@mboxmini.local
-ADMIN_PASSWORD=${ADMIN_PASSWORD}
+ADMIN_PASSWORD=__ADMIN_PASSWORD__
 ENVFILE
 
-    # Replace variables in the environment file
-    sed -i.bak \
-        -e "s|\\${API_KEY}|${API_KEY}|g" \
-        -e "s|\\${JWT_SECRET}|${JWT_SECRET}|g" \
-        -e "s|\\${ADMIN_PASSWORD}|${ADMIN_PASSWORD}|g" \
+    # Replace placeholders with actual values
+    sed -i \
+        -e "s|__API_KEY__|${API_KEY}|g" \
+        -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
+        -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
         "$INSTALL_DIR/.env"
-    rm -f "$INSTALL_DIR/.env.bak"
     
     chmod 600 "$INSTALL_DIR/.env"
     
-    # Save credentials to a separate file for reference
+    # Create credentials file template
     cat > "$INSTALL_DIR/admin_credentials.txt" << 'CREDS'
 MboxMini Admin Credentials
 -------------------------
 Email: admin@mboxmini.local
-Password: ${ADMIN_PASSWORD}
-API Key: ${API_KEY}
+Password: __ADMIN_PASSWORD__
+API Key: __API_KEY__
 
 Please change these credentials after first login.
 CREDS
 
-    # Replace variables in the credentials file
-    sed -i.bak \
-        -e "s|\\${ADMIN_PASSWORD}|${ADMIN_PASSWORD}|g" \
-        -e "s|\\${API_KEY}|${API_KEY}|g" \
+    # Replace placeholders in credentials file
+    sed -i \
+        -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
+        -e "s|__API_KEY__|${API_KEY}|g" \
         "$INSTALL_DIR/admin_credentials.txt"
-    rm -f "$INSTALL_DIR/admin_credentials.txt.bak"
     
     chmod 600 "$INSTALL_DIR/admin_credentials.txt"
 }
@@ -219,23 +218,24 @@ setup_service() {
         <string>/usr/local/bin/docker</string>
         <string>compose</string>
         <string>-f</string>
-        <string>${INSTALL_DIR}/docker-compose.yml</string>
+        <string>__INSTALL_DIR__/docker-compose.yml</string>
         <string>up</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>WorkingDirectory</key>
-    <string>${INSTALL_DIR}</string>
+    <string>__INSTALL_DIR__</string>
     <key>StandardOutPath</key>
-    <string>${INSTALL_DIR}/mboxmini.log</string>
+    <string>__INSTALL_DIR__/mboxmini.log</string>
     <key>StandardErrorPath</key>
-    <string>${INSTALL_DIR}/mboxmini.error.log</string>
+    <string>__INSTALL_DIR__/mboxmini.error.log</string>
 </dict>
 </plist>
 PLIST
-        # Replace variables in the plist file
-        sed -i.bak -e "s|\\${INSTALL_DIR}|${INSTALL_DIR}|g" "$PLIST_FILE"
-        rm -f "$PLIST_FILE.bak"
+        # Replace placeholders in plist file
+        sed -i \
+            -e "s|__INSTALL_DIR__|${INSTALL_DIR}|g" \
+            "$PLIST_FILE"
         chmod 644 "$PLIST_FILE"
         launchctl load "$PLIST_FILE"
     else
@@ -249,20 +249,19 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=${INSTALL_DIR}
+WorkingDirectory=__INSTALL_DIR__
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
-User=${DEFAULT_USER}
+User=__DEFAULT_USER__
 
 [Install]
 WantedBy=multi-user.target
 SERVICE
-        # Replace variables in the service file
-        sed -i.bak \
-            -e "s|\\${INSTALL_DIR}|${INSTALL_DIR}|g" \
-            -e "s|\\${DEFAULT_USER}|${DEFAULT_USER}|g" \
+        # Replace placeholders in service file
+        sed -i \
+            -e "s|__INSTALL_DIR__|${INSTALL_DIR}|g" \
+            -e "s|__DEFAULT_USER__|${DEFAULT_USER}|g" \
             "/etc/systemd/system/mboxmini.service"
-        rm -f "/etc/systemd/system/mboxmini.service.bak"
         
         systemctl daemon-reload
         systemctl enable mboxmini.service
