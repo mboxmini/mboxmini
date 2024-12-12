@@ -120,7 +120,7 @@ create_env_file() {
         cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.backup"
     fi
 
-    cat > "$INSTALL_DIR/.env" << EOF
+    cat > "$INSTALL_DIR/.env" << 'ENVFILE'
 # Security
 API_KEY=${API_KEY}
 JWT_SECRET=${JWT_SECRET}
@@ -138,12 +138,20 @@ NODE_ENV=production
 # Admin Credentials
 ADMIN_EMAIL=admin@mboxmini.local
 ADMIN_PASSWORD=${ADMIN_PASSWORD}
-EOF
+ENVFILE
 
+    # Replace variables in the environment file
+    sed -i.bak \
+        -e "s|\\${API_KEY}|${API_KEY}|g" \
+        -e "s|\\${JWT_SECRET}|${JWT_SECRET}|g" \
+        -e "s|\\${ADMIN_PASSWORD}|${ADMIN_PASSWORD}|g" \
+        "$INSTALL_DIR/.env"
+    rm -f "$INSTALL_DIR/.env.bak"
+    
     chmod 600 "$INSTALL_DIR/.env"
     
     # Save credentials to a separate file for reference
-    cat > "$INSTALL_DIR/admin_credentials.txt" << EOF
+    cat > "$INSTALL_DIR/admin_credentials.txt" << 'CREDS'
 MboxMini Admin Credentials
 -------------------------
 Email: admin@mboxmini.local
@@ -151,7 +159,15 @@ Password: ${ADMIN_PASSWORD}
 API Key: ${API_KEY}
 
 Please change these credentials after first login.
-EOF
+CREDS
+
+    # Replace variables in the credentials file
+    sed -i.bak \
+        -e "s|\\${ADMIN_PASSWORD}|${ADMIN_PASSWORD}|g" \
+        -e "s|\\${API_KEY}|${API_KEY}|g" \
+        "$INSTALL_DIR/admin_credentials.txt"
+    rm -f "$INSTALL_DIR/admin_credentials.txt.bak"
+    
     chmod 600 "$INSTALL_DIR/admin_credentials.txt"
 }
 
@@ -191,7 +207,7 @@ setup_service() {
         # Create a launch agent for macOS
         PLIST_FILE="$HOME/Library/LaunchAgents/com.mboxmini.app.plist"
         mkdir -p "$HOME/Library/LaunchAgents"
-        cat > "$PLIST_FILE" << EOF
+        cat > "$PLIST_FILE" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -216,12 +232,15 @@ setup_service() {
     <string>${INSTALL_DIR}/mboxmini.error.log</string>
 </dict>
 </plist>
-EOF
+PLIST
+        # Replace variables in the plist file
+        sed -i.bak -e "s|\\${INSTALL_DIR}|${INSTALL_DIR}|g" "$PLIST_FILE"
+        rm -f "$PLIST_FILE.bak"
         chmod 644 "$PLIST_FILE"
         launchctl load "$PLIST_FILE"
     else
         # Create systemd service for Linux
-        cat > /etc/systemd/system/mboxmini.service << EOF
+        cat > /etc/systemd/system/mboxmini.service << 'SERVICE'
 [Unit]
 Description=MBoxMini Minecraft Server Manager
 After=docker.service
@@ -237,7 +256,14 @@ User=${DEFAULT_USER}
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SERVICE
+        # Replace variables in the service file
+        sed -i.bak \
+            -e "s|\\${INSTALL_DIR}|${INSTALL_DIR}|g" \
+            -e "s|\\${DEFAULT_USER}|${DEFAULT_USER}|g" \
+            "/etc/systemd/system/mboxmini.service"
+        rm -f "/etc/systemd/system/mboxmini.service.bak"
+        
         systemctl daemon-reload
         systemctl enable mboxmini.service
     fi
