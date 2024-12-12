@@ -415,7 +415,7 @@ install_mboxmini() {
     # Start services
     print_info "Starting services..."
     # Use env file with docker compose and ensure we're in the right directory
-    if ! (cd "${INSTALL_DIR}" && COMPOSE_PROJECT_NAME=mboxmini docker compose --env-file "${INSTALL_DIR}/.env" up -d); then
+    if ! (cd "${INSTALL_DIR}" && docker compose up -d); then
         print_error "Failed to start services. Check the logs with: cd ${INSTALL_DIR} && docker compose logs"
         exit 1
     fi
