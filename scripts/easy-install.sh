@@ -275,8 +275,8 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=__INSTALL_DIR__
 EnvironmentFile=__INSTALL_DIR__/.env
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
+ExecStart=/usr/bin/docker compose --env-file __INSTALL_DIR__/.env up -d
+ExecStop=/usr/bin/docker compose --env-file __INSTALL_DIR__/.env down
 User=__DEFAULT_USER__
 
 [Install]
@@ -355,12 +355,36 @@ cleanup_installation() {
     rm -rf "$INSTALL_DIR"
 }
 
-# Install MboxMini
+# Add function to setup docker permissions
+setup_docker_permissions() {
+    print_info "Setting up Docker permissions..."
+    if ! getent group docker > /dev/null; then
+        print_info "Creating docker group..."
+        groupadd docker
+    fi
+    
+    # Add user to docker group
+    if [[ "$OS" != "macos" ]]; then
+        print_info "Adding ${DEFAULT_USER} to docker group..."
+        usermod -aG docker "${DEFAULT_USER}"
+    fi
+    
+    # Set proper permissions on docker.sock
+    if [ -S /var/run/docker.sock ]; then
+        print_info "Setting permissions on docker.sock..."
+        chmod 666 /var/run/docker.sock
+    fi
+}
+
+# Modify the install_mboxmini function to handle environment variables properly:
 install_mboxmini() {
     print_info "Installing MboxMini..."
     
     # Create system user if needed
     create_system_user
+    
+    # Setup docker permissions
+    setup_docker_permissions
     
     # Create directories and files
     create_directories
@@ -376,19 +400,9 @@ install_mboxmini() {
     # Start services
     cd "$INSTALL_DIR"
     
-    # Export required environment variables directly
-    export API_KEY
-    export JWT_SECRET
-    export ADMIN_PASSWORD
-    export HOST_DATA_PATH="./minecraft-data"
-    export DATA_PATH="/minecraft-data"
-    export DB_PATH="/data/mboxmini.db"
-    export API_PORT=8080
-    export FRONTEND_PORT=3000
-    export NODE_ENV=production
-    
     print_info "Starting services..."
-    if ! docker compose up -d; then
+    # Use env file with docker compose
+    if ! docker compose --env-file .env up -d; then
         print_error "Failed to start services. Check the logs with: docker compose logs"
         exit 1
     fi
@@ -431,6 +445,10 @@ install_mboxmini() {
     
     echo -e "\nTo view logs:"
     echo "docker compose logs -f"
+    
+    if [[ "$OS" != "macos" ]]; then
+        echo -e "\nNOTE: You may need to log out and back in for docker permissions to take effect."
+    fi
 }
 
 # Main script
