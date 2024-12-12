@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useShow, useNavigation } from "@refinedev/core";
 import { Show } from "@refinedev/antd";
-import { Card, Space, Button, Tag, message, Row, Col, Divider, Modal, Checkbox } from "antd";
-import { PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined, LoadingOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
+import { Card, Space, Button, Tag, message, Row, Col, Divider, Modal, Checkbox, Tooltip } from "antd";
+import { PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined, LoadingOutlined, ExclamationCircleOutlined, CopyOutlined } from "@ant-design/icons";
 import { Server } from "@/interfaces";
 import { startServer, stopServer, deleteServer } from "@/api/servers";
 import { Console } from "@/components/console";
@@ -116,13 +116,30 @@ export const ServerShow: React.FC = () => {
           <Space direction="vertical" style={{ width: "100%" }}>
             <Card>
               <Space direction="vertical" style={{ width: "100%" }}>
-                <div>
-                  <h2>{record?.name}</h2>
-                  <Tag color={getStatusColor(record?.status || "")}>
-                    {record?.status?.toUpperCase()}
-                  </Tag>
-                  <div>Version: {record?.version}</div>
-                  <div>Address: localhost:{record?.port}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <h2>{record?.name}</h2>
+                    <Tag color={getStatusColor(record?.status || "")}>
+                      {record?.status?.toUpperCase()}
+                    </Tag>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div>Version: {record?.version}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                      <span>Address: localhost:{record?.port}</span>
+                      <Tooltip title="Copy address">
+                        <Button
+                          type="text"
+                          icon={<CopyOutlined />}
+                          size="small"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`localhost:${record?.port}`);
+                            message.success('Address copied to clipboard');
+                          }}
+                        />
+                      </Tooltip>
+                    </div>
+                  </div>
                 </div>
                 <Divider />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -154,7 +171,7 @@ export const ServerShow: React.FC = () => {
                     </Button>
                   </Space>
                   <Button
-                    danger
+                    type="default"
                     icon={<DeleteOutlined />}
                     onClick={handleDeleteServer}
                     disabled={actionLoading !== null}

@@ -142,6 +142,7 @@ export const ServerList: React.FC = () => {
       title: "Version",
       dataIndex: "version",
       key: "version",
+      render: (version: string) => version || "Latest",
     },
     {
       title: "Address",
