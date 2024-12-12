@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/mboxmini/mboxmini/backend/api/config"
+	"github.com/mboxmini/mboxmini/backend/api/database"
 	"github.com/mboxmini/mboxmini/backend/api/docker"
 	"github.com/mboxmini/mboxmini/backend/api/handlers"
 	"github.com/mboxmini/mboxmini/backend/api/middleware"
@@ -14,19 +14,24 @@ import (
 )
 
 func main() {
-	cfg := config.NewDefaultConfig()
-
-	// Get API key from environment
-	apiKeyValue := os.Getenv("API_KEY")
-	if apiKeyValue == "" {
-		log.Fatal("API_KEY environment variable is not set")
+	// Get JWT secret from environment
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET environment variable is not set")
 	}
+
+	// Initialize database
+	db, err := database.New("mboxmini.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
 	// Initialize middleware
 	rateLimiter := middleware.NewRateLimiter()
-	apiKey := &middleware.APIKey{Key: apiKeyValue}
+	authMiddleware := middleware.NewAuthMiddleware(db, jwtSecret)
 
-	// Initialize Docker manager with a wider port range
+	// Initialize Docker manager
 	dataPath := os.Getenv("DATA_PATH")
 	manager, err := docker.NewManager(dataPath, 25565, 25665)
 	if err != nil {
@@ -35,6 +40,7 @@ func main() {
 
 	// Initialize handlers
 	serverHandler := handlers.NewServerHandler(manager)
+	authHandler := handlers.NewAuthHandler(db, jwtSecret)
 
 	// Initialize router
 	r := mux.NewRouter()
@@ -42,33 +48,32 @@ func main() {
 	// Apply CORS middleware to the root router
 	r.Use(middleware.CORS)
 
-	// Add health check endpoint (no auth required)
+	// Public endpoints (no auth required)
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	}).Methods("GET", "OPTIONS")
 
-	// Add middleware to API routes
-	api := r.PathPrefix("/api").Subrouter()
-	api.Use(middleware.Logging)
-	api.Use(rateLimiter.RateLimit)
-	api.Use(apiKey.Authenticate)
+	// Auth endpoints (no auth required)
+	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
 
-	// Register routes
+	// Protected API routes
+	api := r.PathPrefix("/api").Subrouter()
+	api.Use(authMiddleware.Authenticate)
+	api.Use(rateLimiter.RateLimit)
+
+	// Register server routes
 	serverHandler.RegisterRoutes(api)
 
-	// Add OPTIONS handler for all routes
-	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-
 	// Start server
-	log.Printf("Starting server on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
+	port := os.Getenv("API_PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Starting server on port %s", port)
+	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
 }

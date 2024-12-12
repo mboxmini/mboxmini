@@ -1,24 +1,93 @@
 import type { AuthProvider } from "@refinedev/core";
+import { axiosInstance } from "@/providers/axios";
 
-// Simple API key authentication
-const API_KEY = import.meta.env.VITE_API_KEY || "development"; // Use VITE_API_KEY
 const TOKEN_KEY = "mboxmini_token";
+const API_KEY = "mboxmini_api_key";
 
-// Log the API key being used (for debugging)
-console.log('Using API key:', API_KEY);
+interface AuthResponse {
+  token: string;
+  api_key: string;
+  message: string;
+}
+
+interface LoginParams {
+  username: string;
+  password: string;
+}
+
+interface RegisterParams {
+  username: string;
+  password: string;
+}
 
 export const authProvider: AuthProvider = {
-  login: async ({ email, password }) => {
-    // For development, accept any credentials and use the API key
-    localStorage.setItem(TOKEN_KEY, API_KEY);
-    return {
-      success: true,
-      redirectTo: "/",
-    };
+  login: async ({ username, password }: LoginParams) => {
+    try {
+      const { data } = await axiosInstance.post<AuthResponse>("/api/auth/login", {
+        username,
+        password,
+      });
+
+      // Store both JWT token and API key
+      localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem(API_KEY, data.api_key);
+
+      // Update axios default headers
+      axiosInstance.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
+
+      return {
+        success: true,
+        redirectTo: "/",
+      };
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Login failed";
+      return {
+        success: false,
+        error: {
+          message,
+          name: "Invalid credentials",
+        },
+      };
+    }
+  },
+
+  register: async ({ username, password }: RegisterParams) => {
+    try {
+      const { data } = await axiosInstance.post<AuthResponse>("/api/auth/register", {
+        username,
+        password,
+      });
+
+      // Store both JWT token and API key
+      localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem(API_KEY, data.api_key);
+
+      // Update axios default headers
+      axiosInstance.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
+
+      return {
+        success: true,
+        redirectTo: "/",
+      };
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Registration failed";
+      return {
+        success: false,
+        error: {
+          message,
+          name: "Registration Error",
+        },
+      };
+    }
   },
 
   logout: async () => {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(API_KEY);
+    
+    // Clear authorization header
+    delete axiosInstance.defaults.headers.common["Authorization"];
+
     return {
       success: true,
       redirectTo: "/login",
@@ -26,9 +95,15 @@ export const authProvider: AuthProvider = {
   },
 
   onError: async (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    if (status === 401 || status === 403) {
       return {
         logout: true,
+        redirectTo: "/login",
+        error: {
+          message: "Session expired, please login again",
+          name: "Authentication Error",
+        },
       };
     }
     return { error };
@@ -36,20 +111,23 @@ export const authProvider: AuthProvider = {
 
   check: async () => {
     const token = localStorage.getItem(TOKEN_KEY);
-    if (token) {
+    if (!token) {
       return {
-        authenticated: true,
+        authenticated: false,
+        error: {
+          message: "Please login to continue",
+          name: "Authentication Required",
+        },
+        logout: true,
+        redirectTo: "/login",
       };
     }
 
+    // Set authorization header
+    axiosInstance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
     return {
-      authenticated: false,
-      error: {
-        message: "Authentication failed",
-        name: "Token not found",
-      },
-      logout: true,
-      redirectTo: "/login",
+      authenticated: true,
     };
   },
 
@@ -59,10 +137,22 @@ export const authProvider: AuthProvider = {
       return null;
     }
 
+    // Decode JWT token to get user info
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(window.atob(base64));
+
     return {
-      id: 1,
-      name: "Admin",
-      email: "admin@example.com",
+      id: payload.user_id,
+      name: payload.username,
     };
+  },
+
+  getPermissions: async () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      return null;
+    }
+    return ["authenticated"];
   },
 };

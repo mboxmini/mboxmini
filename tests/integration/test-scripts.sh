@@ -2,12 +2,43 @@
 
 # Configuration
 API_URL="http://localhost:8080"
-API_KEY="your-secret-key"
+USERNAME="admin"
+PASSWORD=""
+TOKEN=""
+API_KEY=""
 
 # Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
+
+# Load credentials
+load_credentials() {
+    if [ -f "admin_credentials.txt" ]; then
+        PASSWORD=$(grep "Password:" admin_credentials.txt | cut -d' ' -f2)
+    else
+        echo -e "${RED}Error: admin_credentials.txt not found${NC}"
+        exit 1
+    fi
+}
+
+# Login and get token
+login() {
+    echo -e "${GREEN}Logging in...${NC}"
+    local response=$(curl -s -X POST \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD\"}" \
+        "$API_URL/api/auth/login")
+    
+    TOKEN=$(echo $response | jq -r '.token')
+    API_KEY=$(echo $response | jq -r '.api_key')
+    
+    if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+        echo -e "${RED}Login failed${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}Login successful${NC}"
+}
 
 # Helper function for API calls
 call_api() {
@@ -15,15 +46,19 @@ call_api() {
     local endpoint=$2
     local data=$3
     
+    if [ -z "$TOKEN" ]; then
+        login
+    fi
+    
     if [ -n "$data" ]; then
         curl -s -X "$method" \
-            -H "X-API-Key: $API_KEY" \
+            -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
             -d "$data" \
             "$API_URL$endpoint"
     else
         curl -s -X "$method" \
-            -H "X-API-Key: $API_KEY" \
+            -H "Authorization: Bearer $TOKEN" \
             "$API_URL$endpoint"
     fi
     echo # New line after response
@@ -71,6 +106,9 @@ update_config() {
         }
     }'
 }
+
+# Main script
+load_credentials
 
 # Example usage
 case "$1" in

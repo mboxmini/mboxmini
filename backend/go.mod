@@ -7,7 +7,10 @@ toolchain go1.22.2
 require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/docker/go-connections v0.4.0
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/gorilla/mux v1.8.1
+	github.com/mattn/go-sqlite3 v1.14.24
+	golang.org/x/crypto v0.14.0
 )
 
 require (
