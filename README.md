@@ -21,6 +21,30 @@
 
 ## 🚀 Quick Start
 
+### Easy Installation (Recommended)
+
+The easiest way to get started is using our one-line installation script:
+
+For macOS:
+```bash
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash
+```
+
+For Linux (requires sudo):
+```bash
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | sudo bash
+```
+
+The script will:
+- 🔍 Detect your operating system
+- ⚙️ Configure appropriate paths and permissions
+- 🔑 Generate secure JWT secret
+- 📦 Set up Docker containers
+- 🚀 Start the application
+- 🔧 Configure auto-start on boot
+
+### Manual Installation
+
 1. Clone the repository:
 ```bash
 git clone https://github.com/mboxmini/mboxmini.git
