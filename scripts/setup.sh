@@ -1,11 +1,47 @@
 #!/bin/bash
 
-# Generate API key if not exists
-generate_api_key() {
-    if [ -z "$API_KEY" ]; then
-        API_KEY=$(openssl rand -hex 32)
-        echo "Generated new API key: $API_KEY"
-    fi
+# Generate secrets if they don't exist
+generate_secrets() {
+    # Always generate new secrets for fresh setup
+    API_KEY=$(openssl rand -hex 32)
+    JWT_SECRET=$(openssl rand -hex 32)
+    
+    echo "Generated new API key: $API_KEY"
+    echo "Generated new JWT secret: $JWT_SECRET"
+    
+    # Export the variables so they're available to docker-compose
+    export API_KEY
+    export JWT_SECRET
+}
+
+# Create initial admin user
+create_admin_user() {
+    local username="admin@admin.localhost"
+    local password=$(openssl rand -hex 8)  # Generate random 8-character password
+    
+    echo "Creating initial admin user..."
+    echo "Username: $username"
+    echo "Password: $password"
+    
+    # Store credentials in a secure file
+    echo "Admin Credentials" > admin_credentials.txt
+    echo "Username: $username" >> admin_credentials.txt
+    echo "Password: $password" >> admin_credentials.txt
+    chmod 600 admin_credentials.txt
+    
+    # Wait for the API to be ready and create the user
+    echo "Waiting for API to be ready to create admin user..."
+    for i in {1..30}; do
+        if curl -s http://localhost:8080/health > /dev/null; then
+            curl -X POST http://localhost:8080/api/auth/register \
+                -H "Content-Type: application/json" \
+                -d "{\"username\":\"$username\",\"password\":\"$password\"}"
+            echo "Admin user created successfully!"
+            break
+        fi
+        echo "Waiting for API... ($i/30)"
+        sleep 1
+    done
 }
 
 # Get absolute path for minecraft-data
@@ -27,6 +63,7 @@ create_env_files() {
     # Create backend environment file
     echo "Creating backend environment file: $backend_env"
     sed -e "s|{{API_KEY}}|$API_KEY|g" \
+        -e "s|{{JWT_SECRET}}|$JWT_SECRET|g" \
         -e "s|{{HOST_DATA_PATH}}|$HOST_DATA_PATH|g" \
         -e "s|{{API_PORT}}|8080|g" \
         -e "s|{{MINECRAFT_PORT}}|25565|g" \
@@ -72,8 +109,8 @@ echo "Starting MboxMini setup..."
 # Create necessary directories
 mkdir -p scripts/config
 
-# Generate API key
-generate_api_key
+# Generate secrets and export them
+generate_secrets
 
 # Setup development environment
 setup_dev
@@ -98,4 +135,23 @@ case "$OSTYPE" in
         ;;
 esac
 
-echo "Setup completed successfully!" 
+# Verify environment variables are set
+if [ -z "$JWT_SECRET" ]; then
+    echo "Error: JWT_SECRET is not set!"
+    exit 1
+fi
+
+if [ -z "$API_KEY" ]; then
+    echo "Error: API_KEY is not set!"
+    exit 1
+fi
+
+# Start services to create admin user
+echo "Starting services to create admin user..."
+docker-compose up -d
+
+# Create admin user
+create_admin_user
+
+echo "Setup completed successfully!"
+echo "Admin credentials have been saved to admin_credentials.txt" 

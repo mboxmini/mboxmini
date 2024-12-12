@@ -1,6 +1,10 @@
 import { axiosInstance } from "@/providers/axios";
 import { Server, CreateServerRequest } from "@/interfaces";
 
+interface DeleteServerOptions {
+  deleteFiles: boolean;
+}
+
 export const getServers = async (): Promise<Server[]> => {
   const { data } = await axiosInstance.get("/api/servers");
   return data;
@@ -24,9 +28,9 @@ export const stopServer = async (id: string): Promise<void> => {
   await axiosInstance.post(`/api/servers/${id}/stop`);
 };
 
-export const deleteServer = async (id: string, removeFiles = false): Promise<void> => {
+export const deleteServer = async (id: string, options: DeleteServerOptions): Promise<void> => {
   await axiosInstance.delete(`/api/servers/${id}`, {
-    data: { remove_files: removeFiles },
+    data: { remove_files: options.deleteFiles },
   });
 };
 

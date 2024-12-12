@@ -11,6 +11,10 @@ backend/server
 
 # Environment files
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 scripts/config/*.env
 !scripts/config/dev.env
 
@@ -21,13 +25,16 @@ logs/
 # Dependencies
 vendor/
 node_modules/
+.pnp
+.pnp.js
 
 # Minecraft server data
 minecraft-data/
 
 # Build outputs
-frontend/build/
-backend/dist/
+frontend/dist
+dist
+build
 
 # OS specific
 .DS_Store
@@ -40,4 +47,8 @@ Thumbs.db
 # Node specific
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log* 
+yarn-error.log*
+
+# Sensitive data
+admin_credentials.txt
+data/mboxmini.db 

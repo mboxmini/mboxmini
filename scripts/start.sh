@@ -39,9 +39,31 @@ load_env() {
         fi
         # Export the variable
         export "$line"
-        # Echo for debugging
-        echo "Exported: $line" >&2
     done < "$env_file"
+}
+
+# Function to check and install dependencies
+check_dependencies() {
+    echo "Checking dependencies..." >&2
+    
+    # Check backend dependencies
+    cd backend
+    if ! go mod tidy; then
+        echo "Error: Failed to update Go dependencies" >&2
+        exit 1
+    fi
+    cd ..
+
+    # Check frontend dependencies
+    cd frontend
+    if [ ! -d "node_modules" ]; then
+        echo "Installing frontend dependencies..." >&2
+        if ! npm install; then
+            echo "Error: Failed to install frontend dependencies" >&2
+            exit 1
+        fi
+    fi
+    cd ..
 }
 
 # Function to start services
@@ -64,13 +86,23 @@ start_services() {
 
     # Start all services with docker-compose
     echo "Starting services..." >&2
-    docker-compose up -d --build
+    if ! docker-compose up -d --build; then
+        echo "Error: Failed to start services" >&2
+        docker-compose logs
+        exit 1
+    fi
 
     # Wait for API to be ready
     echo "Waiting for API to be ready..." >&2
     for i in {1..30}; do
         if curl -s http://localhost:8080/health > /dev/null; then
+            echo "API is ready!" >&2
             break
+        fi
+        if [ $i -eq 30 ]; then
+            echo "Error: API failed to start" >&2
+            docker-compose logs
+            exit 1
         fi
         echo "Waiting for API... ($i/30)" >&2
         sleep 1
@@ -86,6 +118,9 @@ echo "Starting MboxMini..." >&2
 
 # Check if setup is complete and get env file path
 env_file=$(check_setup)
+
+# Check dependencies
+check_dependencies
 
 # Start all services with env file
 start_services "$env_file"
