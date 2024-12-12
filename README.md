@@ -49,6 +49,31 @@ To update to the latest version, simply run the same script again:
 ```
 The script will detect the existing installation and offer to update to the latest version.
 
+To force a complete reinstallation (this will backup existing Minecraft data):
+```bash
+# For macOS:
+./scripts/easy-install.sh --force
+
+# For Linux (with sudo):
+sudo ./scripts/easy-install.sh --force
+
+# Or directly with curl on Linux:
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | sudo bash -s -- --force
+```
+
+The force reinstall will:
+- 💾 Backup existing Minecraft data
+- 🧹 Remove existing installation
+- 🚫 Stop and remove services
+- ✨ Perform fresh installation
+
+Script options:
+```bash
+Usage: ./scripts/easy-install.sh [-f|--force] [install_dir]
+  -f, --force    Force reinstallation (removes existing installation)
+  install_dir    Optional installation directory (default: /opt/mboxmini on Linux, ~/mboxmini on macOS)
+```
+
 ### Manual Installation (Pre-built Images)
 
 If you prefer to install manually using pre-built images:

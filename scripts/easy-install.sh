@@ -264,6 +264,47 @@ download_files() {
     rm -rf "$TMP_DIR"
 }
 
+# Clean up previous installation
+cleanup_installation() {
+    print_info "Cleaning up previous installation..."
+    
+    # Stop services
+    if cd "$INSTALL_DIR" && [ -f "docker-compose.yml" ]; then
+        print_info "Stopping running services..."
+        docker compose down || true
+    fi
+    
+    # Remove service files
+    if [[ "$OS" == "macos" ]]; then
+        if [ -f "$HOME/Library/LaunchAgents/com.mboxmini.app.plist" ]; then
+            print_info "Removing launchd service..."
+            launchctl unload "$HOME/Library/LaunchAgents/com.mboxmini.app.plist" 2>/dev/null || true
+            rm -f "$HOME/Library/LaunchAgents/com.mboxmini.app.plist"
+        fi
+    else
+        if [ -f "/etc/systemd/system/mboxmini.service" ]; then
+            print_info "Removing systemd service..."
+            systemctl stop mboxmini 2>/dev/null || true
+            systemctl disable mboxmini 2>/dev/null || true
+            rm -f "/etc/systemd/system/mboxmini.service"
+            systemctl daemon-reload
+        fi
+    fi
+    
+    # Backup data if exists
+    if [ -d "$INSTALL_DIR/minecraft-data" ] && [ "$(ls -A $INSTALL_DIR/minecraft-data 2>/dev/null)" ]; then
+        print_info "Backing up Minecraft data..."
+        BACKUP_DIR="${INSTALL_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+        mkdir -p "$BACKUP_DIR"
+        mv "$INSTALL_DIR/minecraft-data" "$BACKUP_DIR/"
+        print_info "Minecraft data backed up to: $BACKUP_DIR"
+    fi
+    
+    # Remove installation directory
+    print_info "Removing installation directory..."
+    rm -rf "$INSTALL_DIR"
+}
+
 # Install MboxMini
 install_mboxmini() {
     print_info "Installing MboxMini..."
@@ -338,18 +379,33 @@ install_mboxmini() {
 
 # Main script
 main() {
+    # Parse command line arguments
+    FORCE_REINSTALL=false
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -f|--force)
+                FORCE_REINSTALL=true
+                shift
+                ;;
+            *)
+                INSTALL_DIR="$1"
+                shift
+                ;;
+        esac
+    done
+    
+    # Set default installation directory if not provided
+    INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
+    
     # Detect OS and set defaults
     detect_os
     
     # Check if we need sudo
     if [[ "$NEED_SUDO" == true && "$EUID" -ne 0 ]]; then
         print_error "Please run this script with sudo:"
-        echo "sudo $0"
+        echo "sudo $0 $([[ "$FORCE_REINSTALL" == true ]] && echo '--force')"
         exit 1
     fi
-    
-    # Set installation directory
-    INSTALL_DIR="${1:-$DEFAULT_DIR}"
     
     print_info "Starting MBoxMini setup on ${OS}..."
     
@@ -357,14 +413,20 @@ main() {
     check_docker_compose
     
     if check_installation; then
-        print_info "MboxMini is already installed in $INSTALL_DIR"
-        read -p "Would you like to update to the latest version? [y/N] " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            update_images
+        if [[ "$FORCE_REINSTALL" == true ]]; then
+            print_warning "Forcing reinstallation of MboxMini..."
+            cleanup_installation
+            install_mboxmini
         else
-            print_info "No changes made. Exiting..."
-            exit 0
+            print_info "MboxMini is already installed in $INSTALL_DIR"
+            read -p "Would you like to update to the latest version? [y/N] " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                update_images
+            else
+                print_info "No changes made. Use --force to reinstall. Exiting..."
+                exit 0
+            fi
         fi
     else
         print_info "Installing MboxMini in $INSTALL_DIR"
@@ -372,5 +434,12 @@ main() {
     fi
 }
 
-# Run main function with provided installation directory or default
+# Update the script usage information at the top:
+print_usage() {
+    echo "Usage: $0 [-f|--force] [install_dir]"
+    echo "  -f, --force    Force reinstallation (removes existing installation)"
+    echo "  install_dir    Optional installation directory (default: $DEFAULT_DIR)"
+}
+
+# Run main function with all arguments
 main "$@" 
