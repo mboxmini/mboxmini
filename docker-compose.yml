@@ -4,9 +4,9 @@ services:
   ui:
     image: intecco/mboxmini-ui:latest
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      - REACT_APP_API_URL=http://localhost:8080
+      - REACT_APP_API_URL=http://localhost:${API_PORT:-8080}
     depends_on:
       api:
         condition: service_healthy
@@ -14,15 +14,18 @@ services:
   api:
     image: intecco/mboxmini-api:latest
     ports:
-      - "8080:8080"
+      - "${API_PORT:-8080}:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - mboxmini-data:/data
-      - ./data:/app/data
+      - ./minecraft-data:${DATA_PATH:-/minecraft-data}
     environment:
       - API_KEY=${API_KEY}
       - JWT_SECRET=${JWT_SECRET}
-      - DATA_PATH=${HOST_DATA_PATH}
+      - DATA_PATH=${DATA_PATH:-/minecraft-data}
+      - NODE_ENV=${NODE_ENV:-production}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@mboxmini.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 10s

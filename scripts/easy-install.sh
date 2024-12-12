@@ -308,6 +308,9 @@ SERVICE
     fi
 }
 
+# Add to the top with other variables
+DEFAULT_BRANCH="main"
+
 # Download necessary files
 download_files() {
     print_info "Downloading necessary files..."
@@ -315,9 +318,17 @@ download_files() {
     # Create temporary directory
     TMP_DIR=$(mktemp -d)
     
-    # Download docker-compose.yml
-    if ! curl -sSL "https://raw.githubusercontent.com/mboxmini/mboxmini/main/docker-compose.yml" -o "$TMP_DIR/docker-compose.yml"; then
-        print_error "Failed to download docker-compose.yml"
+    BRANCH=${BRANCH:-$DEFAULT_BRANCH}
+    print_info "Using branch: ${BRANCH}"
+    
+    # Download docker-compose.yml with better error handling
+    DOWNLOAD_URL="https://raw.githubusercontent.com/mboxmini/mboxmini/${BRANCH}/docker-compose.yml"
+    print_info "Downloading from: ${DOWNLOAD_URL}"
+    
+    HTTP_RESPONSE=$(curl -sS -w "%{http_code}" -L "${DOWNLOAD_URL}" -o "$TMP_DIR/docker-compose.yml")
+    if [ "$HTTP_RESPONSE" != "200" ]; then
+        print_error "Failed to download docker-compose.yml (HTTP ${HTTP_RESPONSE})"
+        print_error "URL: ${DOWNLOAD_URL}"
         rm -rf "$TMP_DIR"
         exit 1
     fi
@@ -508,6 +519,7 @@ main() {
     # Parse command line arguments
     FORCE_REINSTALL=false
     CUSTOM_INSTALL_DIR=""
+    BRANCH="$DEFAULT_BRANCH"
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -523,12 +535,22 @@ main() {
                 FRONTEND_PORT="$2"
                 shift 2
                 ;;
+            --branch)
+                BRANCH="$2"
+                shift 2
+                ;;
             *)
                 CUSTOM_INSTALL_DIR="$1"
                 shift
                 ;;
         esac
     done
+    
+    # Validate branch
+    if [[ "$BRANCH" != "main" && "$BRANCH" != "develop" ]]; then
+        print_error "Invalid branch: $BRANCH. Available branches: main, develop"
+        exit 1
+    fi
     
     # Set installation directory, preferring custom if provided
     INSTALL_DIR="${CUSTOM_INSTALL_DIR:-$DEFAULT_DIR}"
@@ -563,21 +585,23 @@ main() {
     fi
 }
 
-# Update the usage function to be more descriptive
+# Update the usage function
 print_usage() {
-    echo "Usage: $0 [-f|--force] [--api-port PORT] [--frontend-port PORT] [install_dir]"
+    echo "Usage: $0 [-f|--force] [--api-port PORT] [--frontend-port PORT] [--branch BRANCH] [install_dir]"
     echo
     echo "Options:"
     echo "  -f, --force           Force reinstallation (removes existing installation)"
     echo "  --api-port PORT       Set API port (default: $DEFAULT_API_PORT)"
     echo "  --frontend-port PORT  Set frontend port (default: $DEFAULT_FRONTEND_PORT)"
+    echo "  --branch BRANCH       Set GitHub branch to use (default: $DEFAULT_BRANCH)"
+    echo "                        Available branches: main, develop"
     echo "  install_dir           Optional installation directory"
     echo "                        Default: $DEFAULT_DIR"
     echo
     echo "Examples:"
     echo "  $0                                    # Install with default settings"
     echo "  $0 --api-port 8081 --frontend-port 3001  # Install with custom ports"
-    echo "  $0 --force /opt/custom/mboxmini         # Force reinstall in custom location"
+    echo "  $0 --force --branch develop             # Force reinstall using develop branch"
 }
 
 # Run main function with all arguments
