@@ -3,7 +3,6 @@ import {
   useNotificationProvider,
   ThemedLayoutV2,
   ErrorComponent,
-  AuthPage,
 } from "@refinedev/antd";
 import routerProvider, {
   NavigateToResource,
@@ -16,6 +15,7 @@ import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 import { App as AntdApp } from "antd";
 import { Header } from "@/components/header";
 import { Logo } from "@/components/logo";
+import { LoginPage } from "@/pages/auth/login";
 import {
   ServerList,
   ServerCreate,
@@ -54,10 +54,24 @@ const App: React.FC = () => {
             >
               <Routes>
                 <Route
+                  path="/login"
                   element={
                     <Authenticated
-                      key="authenticated-routes"
+                      key="login"
+                      fallback={<LoginPage />}
+                      v3LegacyAuthProviderCompatible
+                    >
+                      <NavigateToResource />
+                    </Authenticated>
+                  }
+                />
+
+                <Route
+                  element={
+                    <Authenticated
+                      key="main"
                       fallback={<CatchAllNavigate to="/login" />}
+                      v3LegacyAuthProviderCompatible
                     >
                       <ThemedLayoutV2
                         Header={() => <Header />}
@@ -82,49 +96,6 @@ const App: React.FC = () => {
                     <Route path="new" element={<ServerCreate />} />
                     <Route path=":id" element={<ServerShow />} />
                   </Route>
-                  <Route path="*" element={<ErrorComponent />} />
-                </Route>
-
-                <Route
-                  element={
-                    <Authenticated key="auth-pages" fallback={<Outlet />}>
-                      <NavigateToResource />
-                    </Authenticated>
-                  }
-                >
-                  <Route
-                    path="/login"
-                    element={
-                      <AuthPage
-                        type="login"
-                        registerLink={false}
-                        forgotPasswordLink={false}
-                        title={
-                          <Logo
-                            titleProps={{ level: 2 }}
-                            svgProps={{
-                              width: "48px",
-                              height: "40px",
-                            }}
-                          />
-                        }
-                      />
-                    }
-                  />
-                </Route>
-
-                <Route
-                  element={
-                    <Authenticated key="catch-all">
-                      <ThemedLayoutV2
-                        Header={() => <Header />}
-                        Sider={() => null}
-                      >
-                        <Outlet />
-                      </ThemedLayoutV2>
-                    </Authenticated>
-                  }
-                >
                   <Route path="*" element={<ErrorComponent />} />
                 </Route>
               </Routes>

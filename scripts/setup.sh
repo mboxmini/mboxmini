@@ -2,20 +2,21 @@
 
 # Generate secrets if they don't exist
 generate_secrets() {
-    if [ -z "$API_KEY" ]; then
-        API_KEY=$(openssl rand -hex 32)
-        echo "Generated new API key: $API_KEY"
-    fi
+    # Always generate new secrets for fresh setup
+    API_KEY=$(openssl rand -hex 32)
+    JWT_SECRET=$(openssl rand -hex 32)
     
-    if [ -z "$JWT_SECRET" ]; then
-        JWT_SECRET=$(openssl rand -hex 32)
-        echo "Generated new JWT secret: $JWT_SECRET"
-    fi
+    echo "Generated new API key: $API_KEY"
+    echo "Generated new JWT secret: $JWT_SECRET"
+    
+    # Export the variables so they're available to docker-compose
+    export API_KEY
+    export JWT_SECRET
 }
 
 # Create initial admin user
 create_admin_user() {
-    local username="admin"
+    local username="admin@admin.localhost"
     local password=$(openssl rand -hex 8)  # Generate random 8-character password
     
     echo "Creating initial admin user..."
@@ -108,7 +109,7 @@ echo "Starting MboxMini setup..."
 # Create necessary directories
 mkdir -p scripts/config
 
-# Generate secrets
+# Generate secrets and export them
 generate_secrets
 
 # Setup development environment
@@ -133,6 +134,17 @@ case "$OSTYPE" in
         exit 1 
         ;;
 esac
+
+# Verify environment variables are set
+if [ -z "$JWT_SECRET" ]; then
+    echo "Error: JWT_SECRET is not set!"
+    exit 1
+fi
+
+if [ -z "$API_KEY" ]; then
+    echo "Error: API_KEY is not set!"
+    exit 1
+fi
 
 # Start services to create admin user
 echo "Starting services to create admin user..."
