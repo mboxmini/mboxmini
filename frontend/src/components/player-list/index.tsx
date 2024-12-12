@@ -5,6 +5,10 @@ import { getServerPlayers } from '@/api/servers';
 import styled from 'styled-components';
 
 const ListWrapper = styled.div`
+  height: 600px;
+  min-height: 200px;
+  overflow-y: auto;
+
   .ant-list-item {
     border-color: ${() => {
       const { useToken } = theme;

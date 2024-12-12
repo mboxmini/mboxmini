@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Input, Button, theme } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import { executeCommand } from '@/api/servers';
@@ -8,6 +8,8 @@ const ConsoleContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 600px;
+  min-height: 300px;
 `;
 
 const ConsoleOutput = styled.div`
@@ -23,8 +25,7 @@ const ConsoleOutput = styled.div`
   }};
   border-radius: 4px;
   padding: 16px;
-  min-height: 200px;
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
   font-family: monospace;
   white-space: pre-wrap;
@@ -68,6 +69,16 @@ export const Console: React.FC<Props> = ({ serverId }) => {
   const [command, setCommand] = useState('');
   const [messages, setMessages] = useState<ConsoleMessage[]>([]);
   const [executing, setExecuting] = useState(false);
+  const inputRef = useRef<any>(null);
+
+  // Focus input when component mounts and after execution
+  useEffect(() => {
+    if (!executing) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  }, [executing]);
 
   const handleExecuteCommand = async () => {
     if (!command.trim()) return;
@@ -93,8 +104,8 @@ export const Console: React.FC<Props> = ({ serverId }) => {
         { text: 'Failed to execute command', isError: true, timestamp },
       ]);
     } finally {
-      setExecuting(false);
       setCommand('');
+      setExecuting(false);
     }
   };
 
@@ -109,12 +120,14 @@ export const Console: React.FC<Props> = ({ serverId }) => {
       </ConsoleOutput>
       <InputContainer>
         <Input
+          ref={inputRef}
           placeholder="Enter command..."
           value={command}
           onChange={e => setCommand(e.target.value)}
           onPressEnter={handleExecuteCommand}
           disabled={executing}
           style={{ flex: 1 }}
+          autoFocus
         />
         <Button
           type="primary"
