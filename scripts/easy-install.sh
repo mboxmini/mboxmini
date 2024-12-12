@@ -325,43 +325,40 @@ download_files() {
     DOWNLOAD_URL="https://raw.githubusercontent.com/mboxmini/mboxmini/${BRANCH}/docker-compose.yml"
     print_info "Downloading from: ${DOWNLOAD_URL}"
     
-    HTTP_RESPONSE=$(curl -sS -w "%{http_code}" -L "${DOWNLOAD_URL}" -o "$TMP_DIR/docker-compose.yml")
+    # Create a temporary file for the download
+    TEMP_COMPOSE_FILE=$(mktemp)
+    
+    # Download the file
+    HTTP_RESPONSE=$(curl -sS -w "%{http_code}" -L "${DOWNLOAD_URL}" -o "$TEMP_COMPOSE_FILE")
     if [ "$HTTP_RESPONSE" != "200" ]; then
         print_error "Failed to download docker-compose.yml (HTTP ${HTTP_RESPONSE})"
         print_error "URL: ${DOWNLOAD_URL}"
+        rm -f "$TEMP_COMPOSE_FILE"
         rm -rf "$TMP_DIR"
         exit 1
     fi
     
-    # Verify the downloaded file
-    if [ ! -s "$TMP_DIR/docker-compose.yml" ]; then
-        print_error "Downloaded docker-compose.yml is empty"
+    # Verify the downloaded file starts with version declaration
+    if ! grep -q "^version:" "$TEMP_COMPOSE_FILE"; then
+        print_error "Downloaded file is not a valid docker-compose.yml"
+        cat "$TEMP_COMPOSE_FILE"
+        rm -f "$TEMP_COMPOSE_FILE"
         rm -rf "$TMP_DIR"
         exit 1
     fi
     
-    # Print file content for verification
-    print_info "Content of downloaded docker-compose.yml:"
-    cat "$TMP_DIR/docker-compose.yml"
+    # Move the verified file to the installation directory
+    mv "$TEMP_COMPOSE_FILE" "$INSTALL_DIR/docker-compose.yml"
     
-    # Move files to installation directory
-    mv "$TMP_DIR/docker-compose.yml" "$INSTALL_DIR/"
-    
-    # Set proper permissions and ownership
+    # Set proper permissions
     chmod 644 "$INSTALL_DIR/docker-compose.yml"
     if [[ "$OS" != "macos" ]]; then
         chown "$DEFAULT_USER:$DEFAULT_USER" "$INSTALL_DIR/docker-compose.yml"
     fi
     
-    # Verify the file was moved successfully and is readable
+    # Verify the file was moved successfully
     if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
         print_error "Failed to move docker-compose.yml to installation directory"
-        rm -rf "$TMP_DIR"
-        exit 1
-    fi
-    
-    if [ ! -r "$INSTALL_DIR/docker-compose.yml" ]; then
-        print_error "docker-compose.yml is not readable"
         rm -rf "$TMP_DIR"
         exit 1
     fi
@@ -369,6 +366,8 @@ download_files() {
     # Verify docker-compose.yml syntax
     if ! (cd "$INSTALL_DIR" && docker compose config --quiet); then
         print_error "Invalid docker-compose.yml syntax"
+        print_error "Content of docker-compose.yml:"
+        cat "$INSTALL_DIR/docker-compose.yml"
         rm -rf "$TMP_DIR"
         exit 1
     fi
