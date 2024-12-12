@@ -21,7 +21,7 @@ const MINECRAFT_VERSIONS = [
 const MEMORY_OPTIONS = ["2G", "4G", "6G", "8G", "12G", "16G"];
 
 export const ServerCreate: React.FC = () => {
-  const { form, onFinish } = useForm<CreateServerRequest>();
+  const { form } = useForm<CreateServerRequest>();
   const { goBack } = useNavigation();
 
   const handleSubmit = async (values: CreateServerRequest) => {

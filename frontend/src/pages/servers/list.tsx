@@ -1,7 +1,7 @@
-import React from "react";
-import { useList, useNavigation } from "@refinedev/core";
-import { List as AntdList, Table, Space, Button, Tag, message, Typography } from "antd";
-import { PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined } from "@ant-design/icons";
+import React, { useState } from "react";
+import { useList, useNavigation, useInvalidate } from "@refinedev/core";
+import { List as AntdList, Table, Space, Button, Tag, message, Typography, Spin } from "antd";
+import { PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined, LoadingOutlined } from "@ant-design/icons";
 import { Server } from "@/interfaces";
 import { startServer, stopServer } from "@/api/servers";
 
@@ -11,24 +11,39 @@ export const ServerList: React.FC = () => {
   const { data, isLoading } = useList<Server>({
     resource: "servers",
   });
-
+  const invalidate = useInvalidate();
   const { push } = useNavigation();
+  const [loadingServers, setLoadingServers] = useState<Record<string, boolean>>({});
 
   const handleStartServer = async (serverId: string) => {
     try {
+      setLoadingServers(prev => ({ ...prev, [serverId]: true }));
       await startServer(serverId);
       message.success("Server starting");
+      invalidate({
+        resource: "servers",
+        invalidates: ["list"],
+      });
     } catch (error) {
       message.error("Failed to start server");
+    } finally {
+      setLoadingServers(prev => ({ ...prev, [serverId]: false }));
     }
   };
 
   const handleStopServer = async (serverId: string) => {
     try {
+      setLoadingServers(prev => ({ ...prev, [serverId]: true }));
       await stopServer(serverId);
       message.success("Server stopping");
+      invalidate({
+        resource: "servers",
+        invalidates: ["list"],
+      });
     } catch (error) {
       message.error("Failed to stop server");
+    } finally {
+      setLoadingServers(prev => ({ ...prev, [serverId]: false }));
     }
   };
 
@@ -78,37 +93,42 @@ export const ServerList: React.FC = () => {
     {
       title: "Actions",
       key: "actions",
-      render: (_: any, record: Server) => (
-        <Space>
-          <Button
-            type="text"
-            icon={<PlayCircleOutlined />}
-            onClick={() => handleStartServer(record.id)}
-            disabled={record.status === "running" || record.status === "starting"}
-            title="Start Server"
-          />
-          <Button
-            type="text"
-            icon={<PauseCircleOutlined />}
-            onClick={() => handleStopServer(record.id)}
-            disabled={record.status === "stopped" || record.status === "stopping"}
-            title="Stop Server"
-          />
-          <Button
-            type="text"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => push(`/servers/delete/${record.id}`)}
-            title="Delete Server"
-          />
-          <Button
-            type="link"
-            onClick={() => push(`/servers/${record.id}`)}
-          >
-            Details
-          </Button>
-        </Space>
-      ),
+      render: (_: any, record: Server) => {
+        const isLoading = loadingServers[record.id];
+        return (
+          <Space>
+            <Button
+              type="text"
+              icon={isLoading ? <LoadingOutlined spin /> : <PlayCircleOutlined />}
+              onClick={() => handleStartServer(record.id)}
+              disabled={isLoading || record.status === "running" || record.status === "starting"}
+              title="Start Server"
+            />
+            <Button
+              type="text"
+              icon={isLoading ? <LoadingOutlined spin /> : <PauseCircleOutlined />}
+              onClick={() => handleStopServer(record.id)}
+              disabled={isLoading || record.status === "stopped" || record.status === "stopping"}
+              title="Stop Server"
+            />
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => push(`/servers/delete/${record.id}`)}
+              disabled={isLoading}
+              title="Delete Server"
+            />
+            <Button
+              type="link"
+              onClick={() => push(`/servers/${record.id}`)}
+              disabled={isLoading}
+            >
+              Details
+            </Button>
+          </Space>
+        );
+      },
     },
   ];
 
