@@ -322,8 +322,24 @@ download_files() {
         exit 1
     fi
     
+    # Verify the downloaded file
+    if [ ! -s "$TMP_DIR/docker-compose.yml" ]; then
+        print_error "Downloaded docker-compose.yml is empty"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+    
     # Move files to installation directory
     mv "$TMP_DIR/docker-compose.yml" "$INSTALL_DIR/"
+    
+    # Verify the file was moved successfully
+    if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
+        print_error "Failed to move docker-compose.yml to installation directory"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+    
+    print_info "docker-compose.yml downloaded and installed successfully"
     
     # Cleanup
     rm -rf "$TMP_DIR"
@@ -391,7 +407,7 @@ setup_docker_permissions() {
     fi
 }
 
-# Modify the install_mboxmini function to handle directories properly:
+# Modify the install_mboxmini function to add more verification
 install_mboxmini() {
     print_info "Installing MboxMini..."
     
@@ -409,13 +425,24 @@ install_mboxmini() {
     # Download necessary files
     download_files
     
+    # Verify all required files exist
+    if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
+        print_error "docker-compose.yml is missing"
+        exit 1
+    fi
+    
+    if [ ! -f "$INSTALL_DIR/.env" ]; then
+        print_error ".env file is missing"
+        exit 1
+    fi
+    
     # Setup auto-start service
     setup_service
     
     # Start services
     print_info "Starting services..."
     # Use env file with docker compose and ensure we're in the right directory
-    if ! (cd "${INSTALL_DIR}" && docker compose up -d); then
+    if ! (cd "$INSTALL_DIR" && ls -la && pwd && docker compose config && docker compose up -d); then
         print_error "Failed to start services. Check the logs with: cd ${INSTALL_DIR} && docker compose logs"
         exit 1
     fi
