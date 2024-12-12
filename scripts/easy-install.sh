@@ -32,6 +32,10 @@ detect_os() {
         DEFAULT_DIR="/opt/mboxmini"
         NEED_SUDO=true
     fi
+
+    # Default ports
+    DEFAULT_FRONTEND_PORT=3000
+    DEFAULT_API_PORT=8080
 }
 
 # Print with color
@@ -120,7 +124,6 @@ create_env_file() {
         cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.backup"
     fi
 
-    # Create environment file template
     cat > "$INSTALL_DIR/.env" << 'ENVFILE'
 # Security
 API_KEY=__API_KEY__
@@ -132,8 +135,8 @@ DATA_PATH=/minecraft-data
 DB_PATH=/data/mboxmini.db
 
 # Server Configuration
-API_PORT=8080
-FRONTEND_PORT=3000
+API_PORT=__API_PORT__
+FRONTEND_PORT=__FRONTEND_PORT__
 NODE_ENV=production
 
 # Admin Credentials
@@ -146,6 +149,8 @@ ENVFILE
         -e "s|__API_KEY__|${API_KEY}|g" \
         -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
         -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
+        -e "s|__API_PORT__|${API_PORT:-$DEFAULT_API_PORT}|g" \
+        -e "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|g" \
         "$INSTALL_DIR/.env"
     
     chmod 600 "$INSTALL_DIR/.env"
@@ -236,9 +241,9 @@ setup_service() {
         <key>DB_PATH</key>
         <string>/data/mboxmini.db</string>
         <key>API_PORT</key>
-        <string>8080</string>
+        <string>__API_PORT__</string>
         <key>FRONTEND_PORT</key>
-        <string>3000</string>
+        <string>__FRONTEND_PORT__</string>
         <key>NODE_ENV</key>
         <string>production</string>
     </dict>
@@ -259,6 +264,8 @@ PLIST
             -e "s|__API_KEY__|${API_KEY}|g" \
             -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
             -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
+            -e "s|__API_PORT__|${API_PORT:-$DEFAULT_API_PORT}|g" \
+            -e "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|g" \
             "$PLIST_FILE"
         chmod 644 "$PLIST_FILE"
         launchctl load "$PLIST_FILE"
@@ -275,8 +282,9 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=__INSTALL_DIR__
 EnvironmentFile=__INSTALL_DIR__/.env
-ExecStart=/usr/bin/docker compose --env-file __INSTALL_DIR__/.env up -d
-ExecStop=/usr/bin/docker compose --env-file __INSTALL_DIR__/.env down
+Environment=COMPOSE_PROJECT_NAME=mboxmini
+ExecStart=/usr/bin/docker compose --env-file __INSTALL_DIR__/.env --project-directory __INSTALL_DIR__ up -d
+ExecStop=/usr/bin/docker compose --env-file __INSTALL_DIR__/.env --project-directory __INSTALL_DIR__ down
 User=__DEFAULT_USER__
 
 [Install]
@@ -376,7 +384,7 @@ setup_docker_permissions() {
     fi
 }
 
-# Modify the install_mboxmini function to handle environment variables properly:
+# Modify the install_mboxmini function to handle directories properly:
 install_mboxmini() {
     print_info "Installing MboxMini..."
     
@@ -398,19 +406,18 @@ install_mboxmini() {
     setup_service
     
     # Start services
-    cd "$INSTALL_DIR"
-    
     print_info "Starting services..."
-    # Use env file with docker compose
-    if ! docker compose --env-file .env up -d; then
-        print_error "Failed to start services. Check the logs with: docker compose logs"
+    # Use env file with docker compose and ensure we're in the right directory
+    if ! (cd "${INSTALL_DIR}" && COMPOSE_PROJECT_NAME=mboxmini docker compose --env-file "${INSTALL_DIR}/.env" up -d); then
+        print_error "Failed to start services. Check the logs with: cd ${INSTALL_DIR} && docker compose logs"
         exit 1
     fi
     
     # Wait for services to be ready
     print_info "Waiting for services to start..."
+    API_PORT=${API_PORT:-$DEFAULT_API_PORT}
     for i in {1..30}; do
-        if curl -s http://localhost:${API_PORT}/health >/dev/null; then
+        if curl -s "http://localhost:${API_PORT}/health" >/dev/null; then
             break
         fi
         echo -n "."
@@ -418,6 +425,7 @@ install_mboxmini() {
     done
     echo
     
+    FRONTEND_PORT=${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}
     print_info "Installation completed successfully!"
     echo -e "\nMboxMini is now running!"
     echo -e "Frontend URL: ${GREEN}http://localhost:${FRONTEND_PORT}${NC}"
@@ -444,7 +452,7 @@ install_mboxmini() {
     fi
     
     echo -e "\nTo view logs:"
-    echo "docker compose logs -f"
+    echo "cd ${INSTALL_DIR} && docker compose logs -f"
     
     if [[ "$OS" != "macos" ]]; then
         echo -e "\nNOTE: You may need to log out and back in for docker permissions to take effect."
@@ -473,6 +481,14 @@ main() {
                 FORCE_REINSTALL=true
                 shift
                 ;;
+            --api-port)
+                API_PORT="$2"
+                shift 2
+                ;;
+            --frontend-port)
+                FRONTEND_PORT="$2"
+                shift 2
+                ;;
             *)
                 CUSTOM_INSTALL_DIR="$1"
                 shift
@@ -485,6 +501,8 @@ main() {
     
     print_info "Starting MBoxMini setup on ${OS}..."
     print_info "Installation directory: ${INSTALL_DIR}"
+    print_info "API Port: ${API_PORT:-$DEFAULT_API_PORT}"
+    print_info "Frontend Port: ${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}"
     
     check_docker
     check_docker_compose
@@ -513,19 +531,19 @@ main() {
 
 # Update the usage function to be more descriptive
 print_usage() {
-    echo "Usage: $0 [-f|--force] [-h|--help] [install_dir]"
+    echo "Usage: $0 [-f|--force] [--api-port PORT] [--frontend-port PORT] [install_dir]"
     echo
     echo "Options:"
-    echo "  -f, --force      Force reinstallation (removes existing installation)"
-    echo "  -h, --help       Show this help message"
-    echo "  install_dir      Optional installation directory"
-    echo "                   Default: $DEFAULT_DIR"
+    echo "  -f, --force           Force reinstallation (removes existing installation)"
+    echo "  --api-port PORT       Set API port (default: $DEFAULT_API_PORT)"
+    echo "  --frontend-port PORT  Set frontend port (default: $DEFAULT_FRONTEND_PORT)"
+    echo "  install_dir           Optional installation directory"
+    echo "                        Default: $DEFAULT_DIR"
     echo
     echo "Examples:"
-    echo "  $0                           # Install in default location"
-    echo "  $0 /opt/custom/mboxmini      # Install in custom location"
-    echo "  $0 --force                   # Force reinstall in default location"
-    echo "  $0 --force /opt/custom/mbox  # Force reinstall in custom location"
+    echo "  $0                                    # Install with default settings"
+    echo "  $0 --api-port 8081 --frontend-port 3001  # Install with custom ports"
+    echo "  $0 --force /opt/custom/mboxmini         # Force reinstall in custom location"
 }
 
 # Run main function with all arguments
