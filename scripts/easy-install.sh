@@ -213,6 +213,27 @@ EOF
     fi
 }
 
+# Download necessary files
+download_files() {
+    print_info "Downloading necessary files..."
+    
+    # Create temporary directory
+    TMP_DIR=$(mktemp -d)
+    
+    # Download docker-compose.yml
+    if ! curl -sSL "https://raw.githubusercontent.com/mboxmini/mboxmini/main/docker-compose.yml" -o "$TMP_DIR/docker-compose.yml"; then
+        print_error "Failed to download docker-compose.yml"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+    
+    # Move files to installation directory
+    mv "$TMP_DIR/docker-compose.yml" "$INSTALL_DIR/"
+    
+    # Cleanup
+    rm -rf "$TMP_DIR"
+}
+
 # Install MboxMini
 install_mboxmini() {
     print_info "Installing MboxMini..."
@@ -225,8 +246,8 @@ install_mboxmini() {
     generate_secrets
     create_env_file
     
-    # Copy docker-compose file
-    cp docker-compose.yml "$INSTALL_DIR/"
+    # Download necessary files
+    download_files
     
     # Setup auto-start service
     setup_service
