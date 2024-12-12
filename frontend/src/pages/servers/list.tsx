@@ -54,14 +54,19 @@ export const ServerList: React.FC = () => {
   const handleStartServer = async (serverId: string) => {
     try {
       setActionLoading(prev => ({ ...prev, [serverId]: 'start' }));
-      await startServer(serverId);
-      message.success("Server started");
-      invalidate({
-        resource: "servers",
-        invalidates: ["list"],
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Operation timed out')), 10000);
       });
+
+      await Promise.race([startServer(serverId), timeoutPromise]);
+      message.success("Server started");
+      await refetch();
     } catch (error) {
-      message.error("Failed to start server");
+      const errorMessage = error instanceof Error && error.message === 'Operation timed out' 
+        ? "Server is taking too long to respond" 
+        : "Failed to start server";
+      message.error(errorMessage);
     } finally {
       setActionLoading(prev => ({ ...prev, [serverId]: null }));
     }
@@ -70,14 +75,19 @@ export const ServerList: React.FC = () => {
   const handleStopServer = async (serverId: string) => {
     try {
       setActionLoading(prev => ({ ...prev, [serverId]: 'stop' }));
-      await stopServer(serverId);
-      message.success("Server stopped");
-      invalidate({
-        resource: "servers",
-        invalidates: ["list"],
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Operation timed out')), 10000);
       });
+
+      await Promise.race([stopServer(serverId), timeoutPromise]);
+      message.success("Server stopped");
+      await refetch();
     } catch (error) {
-      message.error("Failed to stop server");
+      const errorMessage = error instanceof Error && error.message === 'Operation timed out' 
+        ? "Server is taking too long to respond" 
+        : "Failed to stop server";
+      message.error(errorMessage);
     } finally {
       setActionLoading(prev => ({ ...prev, [serverId]: null }));
     }
@@ -97,14 +107,19 @@ export const ServerList: React.FC = () => {
       onOk: async () => {
         try {
           setActionLoading(prev => ({ ...prev, [serverId]: 'delete' }));
-          await deleteServer(serverId, { deleteFiles });
-          message.success("Server deleted");
-          invalidate({
-            resource: "servers",
-            invalidates: ["list"],
+          
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Operation timed out')), 10000);
           });
+
+          await Promise.race([deleteServer(serverId, { deleteFiles }), timeoutPromise]);
+          message.success("Server deleted");
+          await refetch();
         } catch (error) {
-          message.error("Failed to delete server");
+          const errorMessage = error instanceof Error && error.message === 'Operation timed out' 
+            ? "Server is taking too long to respond" 
+            : "Failed to delete server";
+          message.error(errorMessage);
           setActionLoading(prev => ({ ...prev, [serverId]: null }));
         }
       },
@@ -174,7 +189,7 @@ export const ServerList: React.FC = () => {
                 icon={isLoading === 'start' ? <LoadingOutlined /> : <PlayCircleOutlined />}
                 onClick={() => handleStartServer(record.id)}
                 disabled={
-                  isLoading !== undefined ||
+                  Boolean(isLoading) ||
                   record.status === "running" ||
                   record.status === "starting"
                 }
@@ -185,7 +200,7 @@ export const ServerList: React.FC = () => {
                 icon={isLoading === 'stop' ? <LoadingOutlined /> : <PauseCircleOutlined />}
                 onClick={() => handleStopServer(record.id)}
                 disabled={
-                  isLoading !== undefined ||
+                  Boolean(isLoading) ||
                   record.status !== "running"
                 }
                 title="Stop Server"
@@ -195,7 +210,7 @@ export const ServerList: React.FC = () => {
                 style={{ color: '#ff4d4f' }}
                 icon={isLoading === 'delete' ? <LoadingOutlined /> : <DeleteOutlined />}
                 onClick={() => handleDeleteServer(record.id)}
-                disabled={isLoading !== undefined}
+                disabled={Boolean(isLoading)}
                 title="Delete Server"
               />
             </Space>
