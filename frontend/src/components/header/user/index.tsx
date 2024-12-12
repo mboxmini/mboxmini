@@ -2,10 +2,11 @@ import { useGetIdentity, useLogout } from "@refinedev/core";
 import { Avatar, Button, Dropdown, Flex, Skeleton, Typography } from "antd";
 import type { User as UserType } from "@/types";
 import { useStyles } from "./styled";
+import { useNavigate } from "react-router-dom";
 
 export const User = () => {
   const { styles } = useStyles();
-
+  const navigate = useNavigate();
   const { mutate: logout } = useLogout();
   const { data: user, isLoading } = useGetIdentity<UserType>();
 
