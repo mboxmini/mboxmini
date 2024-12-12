@@ -1,14 +1,21 @@
 FROM golang:1.22-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev
+
 WORKDIR /app
 COPY . .
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -o server ./api/main.go
+
+# Build with CGO enabled
+RUN CGO_ENABLED=1 GOOS=linux go build -o server ./api/main.go
 
 FROM alpine:latest
-RUN apk add --no-cache docker-cli
+
+# Install runtime dependencies
+RUN apk add --no-cache docker-cli gcc musl-dev
 
 WORKDIR /app
 COPY --from=builder /app/server .
 
-EXPOSE 8080
 CMD ["./server"] 
