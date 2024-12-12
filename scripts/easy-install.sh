@@ -626,6 +626,98 @@ setup_docker_permissions() {
     fi
 }
 
+# Download necessary files
+download_files() {
+    print_info "Creating necessary files..."
+    
+    # Create docker-compose.yml directly
+    cat > "$INSTALL_DIR/docker-compose.yml" << 'DOCKERCOMPOSE'
+version: '3.8'
+
+services:
+  ui:
+    image: intecco/mboxmini-ui:latest
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:${API_PORT:-8080}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    image: intecco/mboxmini-api:latest
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - mboxmini-data:/data
+      - ./minecraft-data:${DATA_PATH:-/minecraft-data}
+    environment:
+      - API_KEY=${API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - DATA_PATH=${DATA_PATH:-/minecraft-data}
+      - NODE_ENV=${NODE_ENV:-production}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@mboxmini.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      mc-image-pull:
+        condition: service_completed_successfully
+
+  # Service to ensure Minecraft image is pulled
+  mc-image-pull:
+    image: itzg/minecraft-server:latest
+    command: echo "Minecraft server image pulled successfully"
+    deploy:
+      replicas: 0
+    pull_policy: always
+
+volumes:
+  mboxmini-data:
+    name: mboxmini-data
+    driver: local
+DOCKERCOMPOSE
+    
+    # Set proper permissions
+    chmod 644 "$INSTALL_DIR/docker-compose.yml"
+    if [[ "$OS" != "macos" ]]; then
+        chown "$DEFAULT_USER:$DEFAULT_USER" "$INSTALL_DIR/docker-compose.yml"
+    fi
+    
+    # For snap Docker installations, create symlink in home directory
+    if [[ "$DOCKER_IS_SNAP" == true ]]; then
+        print_info "Setting up snap Docker access..."
+        mkdir -p "$DOCKER_COMPOSE_PATH"
+        ln -sf "$INSTALL_DIR/docker-compose.yml" "$DOCKER_COMPOSE_PATH/docker-compose.yml"
+        print_info "Created symlink: $DOCKER_COMPOSE_PATH/docker-compose.yml -> $INSTALL_DIR/docker-compose.yml"
+    fi
+    
+    # Verify docker-compose.yml syntax
+    if [[ "$DOCKER_IS_SNAP" == true ]]; then
+        if ! (cd "$DOCKER_COMPOSE_PATH" && COMPOSE_IGNORE_ORPHANS=true docker compose config --quiet); then
+            print_error "Invalid docker-compose.yml syntax"
+            print_error "Content of docker-compose.yml:"
+            cat "$INSTALL_DIR/docker-compose.yml"
+            exit 1
+        fi
+    else
+        if ! (cd "$INSTALL_DIR" && COMPOSE_IGNORE_ORPHANS=true docker compose config --quiet); then
+            print_error "Invalid docker-compose.yml syntax"
+            print_error "Content of docker-compose.yml:"
+            cat "$INSTALL_DIR/docker-compose.yml"
+            exit 1
+        fi
+    fi
+    
+    print_info "docker-compose.yml created successfully"
+}
+
 # Modify the install_mboxmini function to add verification before starting services
 install_mboxmini() {
     print_info "Installing MboxMini..."
