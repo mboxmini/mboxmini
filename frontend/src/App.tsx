@@ -1,172 +1,141 @@
-import React, { useEffect, useState } from 'react';
-import { Layout, ConfigProvider, theme, Button, Space, message } from 'antd';
-import styled from 'styled-components';
-import { colors } from './theme';
-import ServerControl from './components/ServerControl';
-import Console from './components/Console';
-import PlayerList from './components/PlayerList';
-import ServerList from './components/ServerList';
-import { Server, listServers, debouncedListServers } from './api/server';
-import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
-
-const { Content, Header } = Layout;
-
-const StyledLayout = styled(Layout)`
-  min-height: 100vh;
-  background: ${colors.background};
-`;
-
-const StyledHeader = styled(Header)`
-  background: ${colors.surface};
-  border-bottom: 1px solid ${colors.border};
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-`;
-
-const StyledContent = styled(Content)`
-  padding: 24px;
-  display: flex;
-  gap: 24px;
-
-  @media (max-width: 768px) {
-    flex-direction: column;
-  }
-`;
-
-const MainSection = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-`;
-
-const CreateButtonContainer = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
-
-  .ant-btn {
-    background: ${colors.accent2};
-    border-color: ${colors.accent2};
-
-    &:hover {
-      background: ${colors.accent1};
-      border-color: ${colors.accent1};
-    }
-  }
-`;
+import { Authenticated, Refine } from "@refinedev/core";
+import {
+  useNotificationProvider,
+  ThemedLayoutV2,
+  ErrorComponent,
+  AuthPage,
+} from "@refinedev/antd";
+import routerProvider, {
+  NavigateToResource,
+  UnsavedChangesNotifier,
+  DocumentTitleHandler,
+  CatchAllNavigate,
+} from "@refinedev/react-router-v6";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
+import { App as AntdApp } from "antd";
+import { Header } from "@/components/header";
+import { Logo } from "@/components/logo";
+import {
+  ServerList,
+  ServerCreate,
+  ServerShow,
+} from "@/pages/servers";
+import { dataProvider } from "@/providers/data-provider";
+import { authProvider } from "@/providers/auth-provider";
+import { ConfigProvider } from "@/providers/config-provider";
+import "@refinedev/antd/dist/reset.css";
+import "./styles/custom.css";
 
 const App: React.FC = () => {
-  const [servers, setServers] = useState<Server[]>([]);
-  const [selectedServer, setSelectedServer] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-
-  const fetchServers = async () => {
-    setLoading(true);
-    try {
-      const serverList = await debouncedListServers();
-      setServers(serverList);
-    } catch (error) {
-      console.error('Error fetching servers:', error);
-      message.error('Failed to fetch servers');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!selectedServer) {
-      fetchServers();
-      const interval = setInterval(fetchServers, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [selectedServer]);
-
-  const handleServerCreated = (serverId: string) => {
-    setSelectedServer(serverId);
-    setShowCreateForm(false);
-  };
-
-  const handleOpenServer = (serverId: string) => {
-    setSelectedServer(serverId);
-  };
-
-  const handleBackToList = () => {
-    setSelectedServer(null);
-  };
-
-  const handleServerDeleted = () => {
-    setSelectedServer(null);
-    fetchServers();
-  };
-
   return (
-    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
-      <StyledLayout>
-        <StyledHeader>
-          {selectedServer ? (
-            <>
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={handleBackToList}
-                type="text"
-                style={{ color: colors.text }}
-              />
-              <h1 style={{ color: colors.text, margin: 0 }}>Server Details</h1>
-            </>
-          ) : (
-            <h1 style={{ color: colors.text, margin: 0 }}>MBoxMini</h1>
-          )}
-        </StyledHeader>
-        <StyledContent>
-          {selectedServer ? (
-            <MainSection>
-              <ServerControl
-                key={selectedServer}
-                serverId={selectedServer}
-                onServerCreated={handleServerCreated}
-                onServerDeleted={handleServerDeleted}
-              />
-              <Console serverId={selectedServer} />
-              <PlayerList serverId={selectedServer} />
-            </MainSection>
-          ) : (
-            <MainSection>
-              {showCreateForm ? (
-                <div>
-                  <Space style={{ marginBottom: 16 }}>
-                    <Button icon={<ArrowLeftOutlined />} onClick={() => setShowCreateForm(false)}>
-                      Back to List
-                    </Button>
-                  </Space>
-                  <ServerControl onServerCreated={handleServerCreated} />
-                </div>
-              ) : (
-                <>
-                  <CreateButtonContainer>
-                    <Button
-                      type="primary"
-                      icon={<PlusOutlined />}
-                      onClick={() => setShowCreateForm(true)}
+    <DevtoolsProvider>
+      <BrowserRouter>
+        <ConfigProvider>
+          <AntdApp>
+            <Refine
+              routerProvider={routerProvider}
+              authProvider={authProvider}
+              dataProvider={dataProvider}
+              resources={[
+                {
+                  name: "servers",
+                  list: "/servers",
+                  create: "/servers/new",
+                  show: "/servers/:id",
+                },
+              ]}
+              notificationProvider={useNotificationProvider}
+              options={{
+                syncWithLocation: true,
+                warnWhenUnsavedChanges: true,
+                breadcrumb: false,
+              }}
+            >
+              <Routes>
+                <Route
+                  element={
+                    <Authenticated
+                      key="authenticated-routes"
+                      fallback={<CatchAllNavigate to="/login" />}
                     >
-                      Create Minecraft Server
-                    </Button>
-                  </CreateButtonContainer>
-                  <ServerList
-                    servers={servers}
-                    loading={loading}
-                    onServerClick={handleOpenServer}
+                      <ThemedLayoutV2
+                        Header={() => <Header />}
+                        Sider={() => null}
+                      >
+                        <div
+                          style={{
+                            maxWidth: "1280px",
+                            padding: "24px",
+                            margin: "0 auto",
+                          }}
+                        >
+                          <Outlet />
+                        </div>
+                      </ThemedLayoutV2>
+                    </Authenticated>
+                  }
+                >
+                  <Route index element={<NavigateToResource />} />
+                  <Route path="/servers">
+                    <Route index element={<ServerList />} />
+                    <Route path="new" element={<ServerCreate />} />
+                    <Route path=":id" element={<ServerShow />} />
+                  </Route>
+                  <Route path="*" element={<ErrorComponent />} />
+                </Route>
+
+                <Route
+                  element={
+                    <Authenticated key="auth-pages" fallback={<Outlet />}>
+                      <NavigateToResource />
+                    </Authenticated>
+                  }
+                >
+                  <Route
+                    path="/login"
+                    element={
+                      <AuthPage
+                        type="login"
+                        registerLink={false}
+                        forgotPasswordLink={false}
+                        title={
+                          <Logo
+                            titleProps={{ level: 2 }}
+                            svgProps={{
+                              width: "48px",
+                              height: "40px",
+                            }}
+                          />
+                        }
+                      />
+                    }
                   />
-                </>
-              )}
-            </MainSection>
-          )}
-        </StyledContent>
-      </StyledLayout>
-    </ConfigProvider>
+                </Route>
+
+                <Route
+                  element={
+                    <Authenticated key="catch-all">
+                      <ThemedLayoutV2
+                        Header={() => <Header />}
+                        Sider={() => null}
+                      >
+                        <Outlet />
+                      </ThemedLayoutV2>
+                    </Authenticated>
+                  }
+                >
+                  <Route path="*" element={<ErrorComponent />} />
+                </Route>
+              </Routes>
+              <UnsavedChangesNotifier />
+              <DocumentTitleHandler />
+            </Refine>
+          </AntdApp>
+        </ConfigProvider>
+        <DevtoolsPanel />
+      </BrowserRouter>
+    </DevtoolsProvider>
   );
 };
 

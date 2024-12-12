@@ -11,9 +11,9 @@ func CORS(next http.Handler) http.Handler {
 			r.Method, r.URL.Path, r.Header.Get("Origin"))
 
 		// Always set CORS headers
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
 		w.Header().Set("Access-Control-Max-Age", "3600")
 
 		// Handle preflight requests

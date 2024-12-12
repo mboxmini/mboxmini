@@ -1,20 +1,13 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { ConfigProvider } from 'antd';
-import { ThemeProvider } from 'styled-components';
-import App from './App';
-import { theme, colors, breakpoints } from './theme';
+import React from "react";
+import { createRoot } from "react-dom/client";
 
-import './index.css';
+import App from "./App";
 
-const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
-
+const container = document.getElementById("root");
+// eslint-disable-next-line
+const root = createRoot(container!);
 root.render(
   <React.StrictMode>
-    <ThemeProvider theme={{ colors, breakpoints }}>
-      <ConfigProvider theme={theme}>
-        <App />
-      </ConfigProvider>
-    </ThemeProvider>
-  </React.StrictMode>
+    <App />
+  </React.StrictMode>,
 );

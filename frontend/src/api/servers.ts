@@ -1,0 +1,46 @@
+import { axiosInstance } from "@/providers/axios";
+import { Server, CreateServerRequest } from "@/interfaces";
+
+export const getServers = async (): Promise<Server[]> => {
+  const { data } = await axiosInstance.get("/api/servers");
+  return data;
+};
+
+export const getServer = async (id: string): Promise<Server> => {
+  const { data } = await axiosInstance.get(`/api/servers/${id}`);
+  return data;
+};
+
+export const createServer = async (request: CreateServerRequest): Promise<string> => {
+  const { data } = await axiosInstance.post("/api/servers", request);
+  return data.id;
+};
+
+export const startServer = async (id: string): Promise<void> => {
+  await axiosInstance.post(`/api/servers/${id}/start`);
+};
+
+export const stopServer = async (id: string): Promise<void> => {
+  await axiosInstance.post(`/api/servers/${id}/stop`);
+};
+
+export const deleteServer = async (id: string, removeFiles = false): Promise<void> => {
+  await axiosInstance.delete(`/api/servers/${id}`, {
+    data: { remove_files: removeFiles },
+  });
+};
+
+export const executeCommand = async (
+  serverId: string,
+  command: string
+): Promise<{ status: string; output?: string; error?: string }> => {
+  const { data } = await axiosInstance.post(`/api/servers/${serverId}/command`, {
+    command,
+  });
+  return data;
+};
+
+export const getServerPlayers = async (serverId: string): Promise<string[]> => {
+  const { data } = await axiosInstance.get(`/api/servers/${serverId}/players`);
+  return data;
+}; 
