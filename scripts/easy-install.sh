@@ -611,5 +611,137 @@ print_usage() {
     echo "  $0 --force --branch develop             # Force reinstall using develop branch"
 }
 
+# Function to install MboxMini
+install_mboxmini() {
+    print_info "Installing MboxMini..."
+    
+    # Create directories with proper permissions
+    create_directories
+    
+    # Generate secrets
+    generate_secrets
+    
+    # Create environment file
+    create_env_file
+    
+    # Create docker-compose.yml
+    print_info "Creating docker-compose.yml..."
+    cat > "$INSTALL_DIR/docker-compose.yml" << 'DOCKERCOMPOSE'
+version: '3.8'
+
+services:
+  ui:
+    image: intecco/mboxmini-ui:latest
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:${API_PORT:-8080}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    image: intecco/mboxmini-api:latest
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - mboxmini-data:/data
+      - ./minecraft-data:${DATA_PATH:-/minecraft-data}
+    environment:
+      - API_KEY=${API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - DATA_PATH=${DATA_PATH:-/minecraft-data}
+      - NODE_ENV=${NODE_ENV:-production}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@mboxmini.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      mc-image-pull:
+        condition: service_completed_successfully
+
+  # Service to ensure Minecraft image is pulled
+  mc-image-pull:
+    image: itzg/minecraft-server:latest
+    command: echo "Minecraft server image pulled successfully"
+    deploy:
+      replicas: 0
+    pull_policy: always
+
+volumes:
+  mboxmini-data:
+    name: mboxmini-data
+    driver: local
+DOCKERCOMPOSE
+    
+    # Set proper permissions
+    chmod 644 "$INSTALL_DIR/docker-compose.yml"
+    
+    # Setup snap Docker access if needed
+    setup_snap_docker_access
+    
+    # Setup auto-start service
+    setup_service
+    
+    # Start services
+    print_info "Starting services..."
+    if [[ "$DOCKER_IS_SNAP" == true ]]; then
+        (cd "$DOCKER_COMPOSE_PATH" && docker compose up -d)
+    else
+        (cd "$INSTALL_DIR" && docker compose up -d)
+    fi
+    
+    # Wait for services to be ready
+    print_info "Waiting for services to start..."
+    API_PORT=${API_PORT:-$DEFAULT_API_PORT}
+    for i in {1..30}; do
+        if curl -s "http://localhost:${API_PORT}/health" >/dev/null; then
+            break
+        fi
+        echo -n "."
+        sleep 1
+    done
+    echo
+    
+    # Print success message
+    FRONTEND_PORT=${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}
+    print_info "Installation completed successfully!"
+    echo -e "\nMboxMini is now running!"
+    echo -e "Frontend URL: ${GREEN}http://localhost:${FRONTEND_PORT}${NC}"
+    echo -e "Backend URL: ${GREEN}http://localhost:${API_PORT}${NC}"
+    echo -e "\nDefault admin credentials:"
+    echo -e "Email: ${GREEN}admin@mboxmini.local${NC}"
+    echo -e "Password: ${GREEN}${ADMIN_PASSWORD}${NC}"
+    echo -e "\nAPI Key: ${YELLOW}${API_KEY}${NC}"
+    echo -e "These credentials are saved in: ${YELLOW}${INSTALL_DIR}/.env${NC}"
+    
+    # Print management instructions
+    if [[ "$OS" == "macos" ]]; then
+        echo -e "\nTo manage the service:"
+        echo "launchctl start com.mboxmini.app   # Start the service"
+        echo "launchctl stop com.mboxmini.app    # Stop the service"
+        echo "launchctl unload ~/Library/LaunchAgents/com.mboxmini.app.plist  # Disable service"
+        echo "launchctl load ~/Library/LaunchAgents/com.mboxmini.app.plist    # Enable service"
+    else
+        echo -e "\nTo manage the service:"
+        echo "sudo systemctl start mboxmini   # Start the service"
+        echo "sudo systemctl stop mboxmini    # Stop the service"
+        echo "sudo systemctl restart mboxmini # Restart the service"
+        echo "sudo systemctl status mboxmini  # Check service status"
+    fi
+    
+    echo -e "\nTo view logs:"
+    if [[ "$DOCKER_IS_SNAP" == true ]]; then
+        echo "cd $DOCKER_COMPOSE_PATH && docker compose logs -f"
+    else
+        echo "cd $INSTALL_DIR && docker compose logs -f"
+    fi
+}
+
 # Run main function with all arguments
 main "$@" 
