@@ -334,6 +334,20 @@ SERVICE
 DOCKER_IS_SNAP=false
 DOCKER_COMPOSE_PATH=""
 
+# Function to check if we have sudo access
+check_sudo() {
+    if ! command -v sudo >/dev/null; then
+        print_error "sudo is not installed. Please install sudo first."
+        exit 1
+    fi
+    
+    # Check if user has sudo privileges
+    if ! sudo -v &>/dev/null; then
+        print_error "Current user does not have sudo privileges"
+        exit 1
+    fi
+}
+
 # Function to detect Docker installation type
 detect_docker_installation() {
     print_info "Checking Docker installation..."
@@ -345,10 +359,28 @@ detect_docker_installation() {
         
         # For snap installations, we'll use a bridge directory in home
         DOCKER_COMPOSE_PATH="$HOME/.mboxmini"
-        mkdir -p "$DOCKER_COMPOSE_PATH"
     else
         DOCKER_IS_SNAP=false
         DOCKER_COMPOSE_PATH="$INSTALL_DIR"
+    fi
+}
+
+# Function to create directories with proper permissions
+create_directories() {
+    print_info "Creating necessary directories..."
+    
+    # Create installation directory with sudo
+    sudo mkdir -p "$INSTALL_DIR"
+    sudo chown "$USER:$(id -gn)" "$INSTALL_DIR"
+    chmod 755 "$INSTALL_DIR"
+    
+    # Create data directories
+    mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/minecraft-data"
+    chmod 755 "$INSTALL_DIR/data" "$INSTALL_DIR/minecraft-data"
+    
+    if [[ "$DOCKER_IS_SNAP" == true ]]; then
+        mkdir -p "$DOCKER_COMPOSE_PATH"
+        chmod 755 "$DOCKER_COMPOSE_PATH"
     fi
 }
 
@@ -357,100 +389,85 @@ setup_snap_docker_access() {
     if [[ "$DOCKER_IS_SNAP" == true ]]; then
         print_info "Setting up snap Docker access..."
         
-        # Create the bridge directory in real user's home
+        # Create the bridge directory in home
         mkdir -p "$DOCKER_COMPOSE_PATH"
+        chmod 755 "$DOCKER_COMPOSE_PATH"
         
-        # Create a symbolic link for docker-compose.yml
-        if [ -L "$DOCKER_COMPOSE_PATH/docker-compose.yml" ]; then
-            rm "$DOCKER_COMPOSE_PATH/docker-compose.yml"
-        fi
-        ln -s "$INSTALL_DIR/docker-compose.yml" "$DOCKER_COMPOSE_PATH/docker-compose.yml"
-        
-        # Create a symbolic link for .env file
-        if [ -L "$DOCKER_COMPOSE_PATH/.env" ]; then
-            rm "$DOCKER_COMPOSE_PATH/.env"
-        fi
-        ln -s "$INSTALL_DIR/.env" "$DOCKER_COMPOSE_PATH/.env"
-        
-        # Create a symbolic link for minecraft-data directory
-        if [ -L "$DOCKER_COMPOSE_PATH/minecraft-data" ]; then
-            rm "$DOCKER_COMPOSE_PATH/minecraft-data"
-        fi
-        ln -s "$INSTALL_DIR/minecraft-data" "$DOCKER_COMPOSE_PATH/minecraft-data"
-        
-        # Set proper ownership
-        if [ "$SUDO_USER" ]; then
-            chown -R "$SUDO_USER:$(id -gn "$SUDO_USER")" "$DOCKER_COMPOSE_PATH"
-            chown -h "$SUDO_USER:$(id -gn "$SUDO_USER")" "$DOCKER_COMPOSE_PATH"/*
-        fi
+        # Create symbolic links
+        ln -sf "$INSTALL_DIR/docker-compose.yml" "$DOCKER_COMPOSE_PATH/docker-compose.yml"
+        ln -sf "$INSTALL_DIR/.env" "$DOCKER_COMPOSE_PATH/.env"
+        ln -sf "$INSTALL_DIR/minecraft-data" "$DOCKER_COMPOSE_PATH/minecraft-data"
         
         print_info "Created bridge directory at: $DOCKER_COMPOSE_PATH"
         print_info "Linked configuration files from: $INSTALL_DIR"
     fi
 }
 
-# Modify the start_services function
-start_services() {
-    print_info "Starting services..."
+# Modify the systemd service creation
+setup_service() {
+    print_info "Setting up auto-start service..."
+    check_sudo
     
-    if [[ "$DOCKER_IS_SNAP" == true ]]; then
-        cd "$DOCKER_COMPOSE_PATH" || exit 1
-        if ! docker compose up -d; then
-            print_error "Failed to start services. Check the logs with: cd $DOCKER_COMPOSE_PATH && docker compose logs"
-            exit 1
-        fi
+    if [[ "$OS" == "macos" ]]; then
+        # Create a launch agent for macOS
+        PLIST_FILE="$HOME/Library/LaunchAgents/com.mboxmini.app.plist"
+        mkdir -p "$HOME/Library/LaunchAgents"
+        # ... rest of macOS service setup ...
     else
-        cd "$INSTALL_DIR" || exit 1
-        if ! docker compose up -d; then
-            print_error "Failed to start services. Check the logs with: cd $INSTALL_DIR && docker compose logs"
-            exit 1
-        fi
-    fi
-}
+        # Create systemd service for Linux
+        if [[ "$DOCKER_IS_SNAP" == true ]]; then
+            # For snap Docker, use the bridge directory
+            sudo tee /etc/systemd/system/mboxmini.service > /dev/null << SERVICE
+[Unit]
+Description=MBoxMini Minecraft Server Manager
+After=docker.service
+Requires=docker.service
 
-# Function to handle Docker installation migration
-handle_docker_migration() {
-    if [[ "$DOCKER_NEEDS_MIGRATION" == true ]]; then
-        echo
-        print_warning "The current Docker snap installation may cause issues with file access."
-        print_warning "It is recommended to switch to the official Docker repository installation."
-        echo
-        read -p "Would you like to switch to the official Docker installation? [y/N] " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            print_info "Migrating Docker installation..."
-            
-            # Stop any running containers
-            docker compose down 2>/dev/null || true
-            
-            # Remove snap Docker
-            print_info "Removing Docker snap..."
-            sudo snap remove docker
-            
-            # Install official Docker
-            print_info "Installing official Docker..."
-            curl -fsSL https://get.docker.com -o get-docker.sh
-            sudo sh get-docker.sh
-            
-            # Add current user to docker group
-            print_info "Adding user to docker group..."
-            sudo usermod -aG docker "$USER"
-            
-            print_info "Docker migration completed successfully!"
-            print_warning "Please log out and log back in for group changes to take effect"
-            print_warning "Then run this script again to complete the installation"
-            exit 0
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${DOCKER_COMPOSE_PATH}
+EnvironmentFile=${INSTALL_DIR}/.env
+Environment=COMPOSE_PROJECT_NAME=mboxmini
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=$USER
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
         else
-            print_warning "Continuing with snap Docker installation..."
-            print_warning "Some features may not work correctly"
-            echo
+            # For non-snap Docker, use the installation directory
+            sudo tee /etc/systemd/system/mboxmini.service > /dev/null << SERVICE
+[Unit]
+Description=MBoxMini Minecraft Server Manager
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${INSTALL_DIR}/.env
+Environment=COMPOSE_PROJECT_NAME=mboxmini
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=$USER
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
         fi
+        
+        sudo systemctl daemon-reload
+        sudo systemctl enable mboxmini.service
     fi
 }
 
 # Clean up previous installation
 cleanup_installation() {
     print_info "Cleaning up previous installation..."
+    check_sudo
     
     # Stop services
     if cd "$INSTALL_DIR" && [ -f "docker-compose.yml" ]; then
@@ -472,10 +489,10 @@ cleanup_installation() {
     else
         if [ -f "/etc/systemd/system/mboxmini.service" ]; then
             print_info "Removing systemd service..."
-            systemctl stop mboxmini 2>/dev/null || true
-            systemctl disable mboxmini 2>/dev/null || true
-            rm -f "/etc/systemd/system/mboxmini.service"
-            systemctl daemon-reload
+            sudo systemctl stop mboxmini 2>/dev/null || true
+            sudo systemctl disable mboxmini 2>/dev/null || true
+            sudo rm -f "/etc/systemd/system/mboxmini.service"
+            sudo systemctl daemon-reload
         fi
     fi
     
@@ -483,14 +500,15 @@ cleanup_installation() {
     if [ -d "$INSTALL_DIR/minecraft-data" ] && [ "$(ls -A $INSTALL_DIR/minecraft-data 2>/dev/null)" ]; then
         print_info "Backing up Minecraft data..."
         BACKUP_DIR="${INSTALL_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
-        mkdir -p "$BACKUP_DIR"
-        mv "$INSTALL_DIR/minecraft-data" "$BACKUP_DIR/"
+        sudo mkdir -p "$BACKUP_DIR"
+        sudo mv "$INSTALL_DIR/minecraft-data" "$BACKUP_DIR/"
+        sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
         print_info "Minecraft data backed up to: $BACKUP_DIR"
     fi
     
     # Remove installation directory
     print_info "Removing installation directory..."
-    rm -rf "$INSTALL_DIR"
+    sudo rm -rf "$INSTALL_DIR"
     
     # Clean up snap bridge directory if it exists
     if [[ "$DOCKER_IS_SNAP" == true ]] && [ -d "$DOCKER_COMPOSE_PATH" ]; then
@@ -498,229 +516,18 @@ cleanup_installation() {
     fi
 }
 
-# Add function to setup docker permissions
-setup_docker_permissions() {
-    print_info "Setting up Docker permissions..."
-    if ! getent group docker > /dev/null; then
-        print_info "Creating docker group..."
-        groupadd docker
-    fi
-    
-    # Add user to docker group
-    if [[ "$OS" != "macos" ]]; then
-        print_info "Adding ${DEFAULT_USER} to docker group..."
-        usermod -aG docker "${DEFAULT_USER}"
-    fi
-    
-    # Set proper permissions on docker.sock
-    if [ -S /var/run/docker.sock ]; then
-        print_info "Setting permissions on docker.sock..."
-        chmod 666 /var/run/docker.sock
-    fi
-}
-
-# Download necessary files
-download_files() {
-    print_info "Creating necessary files..."
-    
-    # Create docker-compose.yml directly
-    cat > "$INSTALL_DIR/docker-compose.yml" << 'DOCKERCOMPOSE'
-version: '3.8'
-
-services:
-  ui:
-    image: intecco/mboxmini-ui:latest
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    environment:
-      - REACT_APP_API_URL=http://localhost:${API_PORT:-8080}
-    depends_on:
-      api:
-        condition: service_healthy
-
-  api:
-    image: intecco/mboxmini-api:latest
-    ports:
-      - "${API_PORT:-8080}:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - mboxmini-data:/data
-      - ./minecraft-data:${DATA_PATH:-/minecraft-data}
-    environment:
-      - API_KEY=${API_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - DATA_PATH=${DATA_PATH:-/minecraft-data}
-      - NODE_ENV=${NODE_ENV:-production}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@mboxmini.local}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    depends_on:
-      mc-image-pull:
-        condition: service_completed_successfully
-
-  # Service to ensure Minecraft image is pulled
-  mc-image-pull:
-    image: itzg/minecraft-server:latest
-    command: echo "Minecraft server image pulled successfully"
-    deploy:
-      replicas: 0
-    pull_policy: always
-
-volumes:
-  mboxmini-data:
-    name: mboxmini-data
-    driver: local
-DOCKERCOMPOSE
-    
-    # Set proper permissions
-    chmod 644 "$INSTALL_DIR/docker-compose.yml"
-    if [[ "$OS" != "macos" ]]; then
-        chown "$DEFAULT_USER:$DEFAULT_USER" "$INSTALL_DIR/docker-compose.yml"
-    fi
-    
-    # For snap Docker installations, create symlink in home directory
-    if [[ "$DOCKER_IS_SNAP" == true ]]; then
-        print_info "Setting up snap Docker access..."
-        mkdir -p "$DOCKER_COMPOSE_PATH"
-        ln -sf "$INSTALL_DIR/docker-compose.yml" "$DOCKER_COMPOSE_PATH/docker-compose.yml"
-        print_info "Created symlink: $DOCKER_COMPOSE_PATH/docker-compose.yml -> $INSTALL_DIR/docker-compose.yml"
-    fi
-    
-    # Verify docker-compose.yml syntax
-    if [[ "$DOCKER_IS_SNAP" == true ]]; then
-        if ! (cd "$DOCKER_COMPOSE_PATH" && COMPOSE_IGNORE_ORPHANS=true docker compose config --quiet); then
-            print_error "Invalid docker-compose.yml syntax"
-            print_error "Content of docker-compose.yml:"
-            cat "$INSTALL_DIR/docker-compose.yml"
-            exit 1
-        fi
-    else
-        if ! (cd "$INSTALL_DIR" && COMPOSE_IGNORE_ORPHANS=true docker compose config --quiet); then
-            print_error "Invalid docker-compose.yml syntax"
-            print_error "Content of docker-compose.yml:"
-            cat "$INSTALL_DIR/docker-compose.yml"
-            exit 1
-        fi
-    fi
-    
-    print_info "docker-compose.yml created successfully"
-}
-
-# Modify the install_mboxmini function to add verification before starting services
-install_mboxmini() {
-    print_info "Installing MboxMini..."
-    
-    # Create system user if needed
-    create_system_user
-    
-    # Setup docker permissions
-    setup_docker_permissions
-    
-    # Create directories and files
-    create_directories
-    generate_secrets
-    create_env_file
-    
-    # Download necessary files
-    download_files
-    
-    # Verify all required files exist
-    if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
-        print_error "docker-compose.yml is missing"
-        exit 1
-    fi
-    
-    if [ ! -f "$INSTALL_DIR/.env" ]; then
-        print_error ".env file is missing"
-        exit 1
-    fi
-    
-    # Setup auto-start service
-    setup_service
-    
-    # Start services
-    print_info "Starting services..."
-    print_info "Current directory contents:"
-    ls -la "$INSTALL_DIR"
-    
-    print_info "Verifying docker-compose.yml:"
-    cat "$INSTALL_DIR/docker-compose.yml"
-    
-    print_info "Verifying docker compose configuration:"
-    cd "$INSTALL_DIR" && docker compose config
-    
-    # Use env file with docker compose and ensure we're in the right directory
-    if ! (cd "$INSTALL_DIR" && docker compose up -d); then
-        print_error "Failed to start services. Check the logs with: cd ${INSTALL_DIR} && docker compose logs"
-        exit 1
-    fi
-    
-    # Wait for services to be ready
-    print_info "Waiting for services to start..."
-    API_PORT=${API_PORT:-$DEFAULT_API_PORT}
-    for i in {1..30}; do
-        if curl -s "http://localhost:${API_PORT}/health" >/dev/null; then
-            break
-        fi
-        echo -n "."
-        sleep 1
-    done
-    echo
-    
-    FRONTEND_PORT=${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}
-    print_info "Installation completed successfully!"
-    echo -e "\nMboxMini is now running!"
-    echo -e "Frontend URL: ${GREEN}http://localhost:${FRONTEND_PORT}${NC}"
-    echo -e "Backend URL: ${GREEN}http://localhost:${API_PORT}${NC}"
-    echo -e "\nDefault admin credentials:"
-    echo -e "Email: ${GREEN}admin@mboxmini.local${NC}"
-    echo -e "Password: ${GREEN}${ADMIN_PASSWORD}${NC}"
-    echo -e "\nAPI Key: ${YELLOW}${API_KEY}${NC}"
-    echo -e "These credentials are saved in: ${YELLOW}${INSTALL_DIR}/.env${NC}"
-    
-    # Print OS-specific management instructions
-    if [[ "$OS" == "macos" ]]; then
-        echo -e "\nTo manage the service:"
-        echo "launchctl start com.mboxmini.app   # Start the service"
-        echo "launchctl stop com.mboxmini.app    # Stop the service"
-        echo "launchctl unload ~/Library/LaunchAgents/com.mboxmini.app.plist  # Disable service"
-        echo "launchctl load ~/Library/LaunchAgents/com.mboxmini.app.plist    # Enable service"
-    else
-        echo -e "\nTo manage the service:"
-        echo "sudo systemctl start mboxmini   # Start the service"
-        echo "sudo systemctl stop mboxmini    # Stop the service"
-        echo "sudo systemctl restart mboxmini # Restart the service"
-        echo "sudo systemctl status mboxmini  # Check service status"
-    fi
-    
-    echo -e "\nTo view logs:"
-    echo "cd ${INSTALL_DIR} && docker compose logs -f"
-    
-    if [[ "$OS" != "macos" ]]; then
-        echo -e "\nNOTE: You may need to log out and back in for docker permissions to take effect."
-    fi
-}
-
-# Main script
+# Modify main function
 main() {
-    # Detect OS and set defaults first
+    # Check if running as root
+    if [ "$EUID" -eq 0 ]; then
+        print_error "Please do not run this script with sudo"
+        print_error "Run it as a regular user, it will ask for sudo when needed"
+        exit 1
+    fi
+    
+    # Detect OS and Docker installation
     detect_os
     detect_docker_installation
-    
-    # Check if we need sudo
-    if [[ "$NEED_SUDO" == true && "$EUID" -ne 0 ]]; then
-        print_error "Please run this script with sudo:"
-        echo "sudo $0 $([[ "$FORCE_REINSTALL" == true ]] && echo '--force')"
-        exit 1
-    fi
-    
-    # Handle Docker migration if needed
-    handle_docker_migration
     
     # Parse command line arguments
     FORCE_REINSTALL=false
@@ -752,22 +559,11 @@ main() {
         esac
     done
     
-    # Validate branch
-    if [[ "$BRANCH" != "main" && "$BRANCH" != "develop" ]]; then
-        print_error "Invalid branch: $BRANCH. Available branches: main, develop"
-        exit 1
-    fi
-    
-    # Set installation directory, preferring custom if provided
+    # Set installation directory
     INSTALL_DIR="${CUSTOM_INSTALL_DIR:-$DEFAULT_DIR}"
     
-    print_info "Starting MBoxMini setup on ${OS}..."
-    print_info "Installation directory: ${INSTALL_DIR}"
-    print_info "API Port: ${API_PORT:-$DEFAULT_API_PORT}"
-    print_info "Frontend Port: ${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}"
-    
-    check_docker
-    check_docker_compose
+    # Check sudo access early
+    check_sudo
     
     if check_installation; then
         if [[ "$FORCE_REINSTALL" == true ]]; then
@@ -786,7 +582,6 @@ main() {
             fi
         fi
     else
-        print_info "Installing MboxMini in $INSTALL_DIR"
         install_mboxmini
     fi
     
