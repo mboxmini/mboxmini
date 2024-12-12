@@ -221,6 +221,27 @@ setup_service() {
         <string>__INSTALL_DIR__/docker-compose.yml</string>
         <string>up</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>API_KEY</key>
+        <string>__API_KEY__</string>
+        <key>JWT_SECRET</key>
+        <string>__JWT_SECRET__</string>
+        <key>ADMIN_PASSWORD</key>
+        <string>__ADMIN_PASSWORD__</string>
+        <key>HOST_DATA_PATH</key>
+        <string>./minecraft-data</string>
+        <key>DATA_PATH</key>
+        <string>/minecraft-data</string>
+        <key>DB_PATH</key>
+        <string>/data/mboxmini.db</string>
+        <key>API_PORT</key>
+        <string>8080</string>
+        <key>FRONTEND_PORT</key>
+        <string>3000</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>WorkingDirectory</key>
@@ -235,6 +256,9 @@ PLIST
         # Replace placeholders in plist file
         sed -i \
             -e "s|__INSTALL_DIR__|${INSTALL_DIR}|g" \
+            -e "s|__API_KEY__|${API_KEY}|g" \
+            -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
+            -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
             "$PLIST_FILE"
         chmod 644 "$PLIST_FILE"
         launchctl load "$PLIST_FILE"
@@ -250,6 +274,7 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=__INSTALL_DIR__/.env
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
 User=__DEFAULT_USER__
