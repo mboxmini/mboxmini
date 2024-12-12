@@ -328,11 +328,18 @@ download_files() {
     # Create a temporary file for the download
     TEMP_COMPOSE_FILE=$(mktemp)
     
-    # Download the file
-    HTTP_RESPONSE=$(curl -sS -w "%{http_code}" -L "${DOWNLOAD_URL}" -o "$TEMP_COMPOSE_FILE")
-    if [ "$HTTP_RESPONSE" != "200" ]; then
-        print_error "Failed to download docker-compose.yml (HTTP ${HTTP_RESPONSE})"
+    # Download the file with curl showing errors
+    if ! curl -fsSL "${DOWNLOAD_URL}" -o "$TEMP_COMPOSE_FILE" 2>/tmp/curl_error; then
+        print_error "Failed to download docker-compose.yml"
         print_error "URL: ${DOWNLOAD_URL}"
+        if [ -f /tmp/curl_error ]; then
+            print_error "Error: $(cat /tmp/curl_error)"
+            rm -f /tmp/curl_error
+        fi
+        if [ "$BRANCH" != "main" ]; then
+            print_error "The ${BRANCH} branch might not exist or the file is not present in this branch."
+            print_error "Try using the main branch: --branch main"
+        fi
         rm -f "$TEMP_COMPOSE_FILE"
         rm -rf "$TMP_DIR"
         exit 1
@@ -341,6 +348,7 @@ download_files() {
     # Verify the downloaded file starts with version declaration
     if ! grep -q "^version:" "$TEMP_COMPOSE_FILE"; then
         print_error "Downloaded file is not a valid docker-compose.yml"
+        print_error "Content received:"
         cat "$TEMP_COMPOSE_FILE"
         rm -f "$TEMP_COMPOSE_FILE"
         rm -rf "$TMP_DIR"
