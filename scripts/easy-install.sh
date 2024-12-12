@@ -555,81 +555,6 @@ handle_docker_migration() {
     fi
 }
 
-# Download necessary files
-download_files() {
-    print_info "Downloading necessary files..."
-    
-    # Create temporary directory
-    TMP_DIR=$(mktemp -d)
-    
-    BRANCH=${BRANCH:-$DEFAULT_BRANCH}
-    print_info "Using branch: ${BRANCH}"
-    
-    # Download docker-compose.yml with better error handling
-    DOWNLOAD_URL="https://raw.githubusercontent.com/mboxmini/mboxmini/${BRANCH}/docker-compose.yml"
-    print_info "Downloading from: ${DOWNLOAD_URL}"
-    
-    # Create a temporary file for the download
-    TEMP_COMPOSE_FILE=$(mktemp)
-    
-    # Download the file with curl showing errors
-    if ! curl -fsSL "${DOWNLOAD_URL}" -o "$TEMP_COMPOSE_FILE" 2>/tmp/curl_error; then
-        print_error "Failed to download docker-compose.yml"
-        print_error "URL: ${DOWNLOAD_URL}"
-        if [ -f /tmp/curl_error ]; then
-            print_error "Error: $(cat /tmp/curl_error)"
-            rm -f /tmp/curl_error
-        fi
-        if [ "$BRANCH" != "main" ]; then
-            print_error "The ${BRANCH} branch might not exist or the file is not present in this branch."
-            print_error "Try using the main branch: --branch main"
-        fi
-        rm -f "$TEMP_COMPOSE_FILE"
-        rm -rf "$TMP_DIR"
-        exit 1
-    fi
-    
-    # Verify the downloaded file starts with version declaration
-    if ! grep -q "^version:" "$TEMP_COMPOSE_FILE"; then
-        print_error "Downloaded file is not a valid docker-compose.yml"
-        print_error "Content received:"
-        cat "$TEMP_COMPOSE_FILE"
-        rm -f "$TEMP_COMPOSE_FILE"
-        rm -rf "$TMP_DIR"
-        exit 1
-    fi
-    
-    # Move the verified file to the installation directory
-    mv "$TEMP_COMPOSE_FILE" "$INSTALL_DIR/docker-compose.yml"
-    
-    # Set proper permissions
-    chmod 644 "$INSTALL_DIR/docker-compose.yml"
-    if [[ "$OS" != "macos" ]]; then
-        chown "$DEFAULT_USER:$DEFAULT_USER" "$INSTALL_DIR/docker-compose.yml"
-    fi
-    
-    # Verify the file was moved successfully
-    if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
-        print_error "Failed to move docker-compose.yml to installation directory"
-        rm -rf "$TMP_DIR"
-        exit 1
-    fi
-    
-    # Verify docker-compose.yml syntax
-    if ! (cd "$INSTALL_DIR" && docker compose config --quiet); then
-        print_error "Invalid docker-compose.yml syntax"
-        print_error "Content of docker-compose.yml:"
-        cat "$INSTALL_DIR/docker-compose.yml"
-        rm -rf "$TMP_DIR"
-        exit 1
-    fi
-    
-    print_info "docker-compose.yml downloaded and installed successfully"
-    
-    # Cleanup
-    rm -rf "$TMP_DIR"
-}
-
 # Clean up previous installation
 cleanup_installation() {
     print_info "Cleaning up previous installation..."
@@ -637,7 +562,11 @@ cleanup_installation() {
     # Stop services
     if cd "$INSTALL_DIR" && [ -f "docker-compose.yml" ]; then
         print_info "Stopping running services..."
-        docker compose down || true
+        if [[ "$DOCKER_IS_SNAP" == true ]]; then
+            cd "$DOCKER_COMPOSE_PATH" && docker compose down || true
+        else
+            docker compose down || true
+        fi
     fi
     
     # Remove service files
@@ -669,6 +598,11 @@ cleanup_installation() {
     # Remove installation directory
     print_info "Removing installation directory..."
     rm -rf "$INSTALL_DIR"
+    
+    # Clean up snap bridge directory if it exists
+    if [[ "$DOCKER_IS_SNAP" == true ]] && [ -d "$DOCKER_COMPOSE_PATH" ]; then
+        rm -rf "$DOCKER_COMPOSE_PATH"
+    fi
 }
 
 # Add function to setup docker permissions
