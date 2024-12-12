@@ -351,10 +351,16 @@ install_mboxmini() {
     # Start services
     cd "$INSTALL_DIR"
     
-    # Export environment variables
-    set -a
-    source .env
-    set +a
+    # Export required environment variables directly
+    export API_KEY
+    export JWT_SECRET
+    export ADMIN_PASSWORD
+    export HOST_DATA_PATH="./minecraft-data"
+    export DATA_PATH="/minecraft-data"
+    export DB_PATH="/data/mboxmini.db"
+    export API_PORT=8080
+    export FRONTEND_PORT=3000
+    export NODE_ENV=production
     
     print_info "Starting services..."
     if ! docker compose up -d; then
@@ -378,7 +384,7 @@ install_mboxmini() {
     echo -e "Frontend URL: ${GREEN}http://localhost:${FRONTEND_PORT}${NC}"
     echo -e "Backend URL: ${GREEN}http://localhost:${API_PORT}${NC}"
     echo -e "\nDefault admin credentials:"
-    echo -e "Email: ${GREEN}${ADMIN_EMAIL}${NC}"
+    echo -e "Email: ${GREEN}admin@mboxmini.local${NC}"
     echo -e "Password: ${GREEN}${ADMIN_PASSWORD}${NC}"
     echo -e "\nAPI Key: ${YELLOW}${API_KEY}${NC}"
     echo -e "These credentials are saved in: ${YELLOW}${INSTALL_DIR}/.env${NC}"
