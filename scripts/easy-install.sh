@@ -470,12 +470,12 @@ cleanup_installation() {
     check_sudo
     
     # Stop services
-    if cd "$INSTALL_DIR" && [ -f "docker-compose.yml" ]; then
+    if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
         print_info "Stopping running services..."
-        if [[ "$DOCKER_IS_SNAP" == true ]]; then
-            cd "$DOCKER_COMPOSE_PATH" && docker compose down || true
+        if [[ "$DOCKER_IS_SNAP" == true ]] && [ -d "$DOCKER_COMPOSE_PATH" ]; then
+            (cd "$DOCKER_COMPOSE_PATH" && docker compose down) || true
         else
-            docker compose down || true
+            (cd "$INSTALL_DIR" && docker compose down) || true
         fi
     fi
     
@@ -507,11 +507,14 @@ cleanup_installation() {
     fi
     
     # Remove installation directory
-    print_info "Removing installation directory..."
-    sudo rm -rf "$INSTALL_DIR"
+    if [ -d "$INSTALL_DIR" ]; then
+        print_info "Removing installation directory..."
+        sudo rm -rf "$INSTALL_DIR"
+    fi
     
     # Clean up snap bridge directory if it exists
     if [[ "$DOCKER_IS_SNAP" == true ]] && [ -d "$DOCKER_COMPOSE_PATH" ]; then
+        print_info "Removing snap bridge directory..."
         rm -rf "$DOCKER_COMPOSE_PATH"
     fi
 }
