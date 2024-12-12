@@ -104,9 +104,11 @@ generate_secrets() {
     if [[ "$OS" == "macos" ]]; then
         API_KEY=$(openssl rand -hex 32)
         JWT_SECRET=$(openssl rand -base64 32)
+        ADMIN_PASSWORD=$(openssl rand -base64 12)
     else
         API_KEY=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
         JWT_SECRET=$(tr -dc 'A-Za-z0-9!"#$%&'\''()*+,-./:;<=>?@[\]^_`{|}~' < /dev/urandom | head -c 32)
+        ADMIN_PASSWORD=$(tr -dc 'A-Za-z0-9!@#$%^&*()_+' < /dev/urandom | head -c 12)
     fi
 }
 
@@ -119,10 +121,38 @@ create_env_file() {
     fi
 
     cat > "$INSTALL_DIR/.env" << EOF
+# Security
 API_KEY=${API_KEY}
 JWT_SECRET=${JWT_SECRET}
+
+# Paths
 HOST_DATA_PATH=./minecraft-data
+DATA_PATH=/minecraft-data
+DB_PATH=/data/mboxmini.db
+
+# Server Configuration
+API_PORT=8080
+FRONTEND_PORT=3000
+NODE_ENV=production
+
+# Admin Credentials
+ADMIN_EMAIL=admin@mboxmini.local
+ADMIN_PASSWORD=${ADMIN_PASSWORD}
 EOF
+
+    chmod 600 "$INSTALL_DIR/.env"
+    
+    # Save credentials to a separate file for reference
+    cat > "$INSTALL_DIR/admin_credentials.txt" << EOF
+MboxMini Admin Credentials
+-------------------------
+Email: admin@mboxmini.local
+Password: ${ADMIN_PASSWORD}
+API Key: ${API_KEY}
+
+Please change these credentials after first login.
+EOF
+    chmod 600 "$INSTALL_DIR/admin_credentials.txt"
 }
 
 # Create necessary directories
@@ -254,13 +284,38 @@ install_mboxmini() {
     
     # Start services
     cd "$INSTALL_DIR"
-    docker compose up -d
+    
+    # Export environment variables
+    set -a
+    source .env
+    set +a
+    
+    print_info "Starting services..."
+    if ! docker compose up -d; then
+        print_error "Failed to start services. Check the logs with: docker compose logs"
+        exit 1
+    fi
+    
+    # Wait for services to be ready
+    print_info "Waiting for services to start..."
+    for i in {1..30}; do
+        if curl -s http://localhost:${API_PORT}/health >/dev/null; then
+            break
+        fi
+        echo -n "."
+        sleep 1
+    done
+    echo
     
     print_info "Installation completed successfully!"
     echo -e "\nMboxMini is now running!"
-    echo -e "Frontend URL: ${GREEN}http://localhost:3000${NC}"
-    echo -e "Backend URL: ${GREEN}http://localhost:8080${NC}"
-    echo -e "\nAdmin credentials have been saved to: ${YELLOW}admin_credentials.txt${NC}"
+    echo -e "Frontend URL: ${GREEN}http://localhost:${FRONTEND_PORT}${NC}"
+    echo -e "Backend URL: ${GREEN}http://localhost:${API_PORT}${NC}"
+    echo -e "\nDefault admin credentials:"
+    echo -e "Email: ${GREEN}${ADMIN_EMAIL}${NC}"
+    echo -e "Password: ${GREEN}${ADMIN_PASSWORD}${NC}"
+    echo -e "\nAPI Key: ${YELLOW}${API_KEY}${NC}"
+    echo -e "These credentials are saved in: ${YELLOW}${INSTALL_DIR}/.env${NC}"
     
     # Print OS-specific management instructions
     if [[ "$OS" == "macos" ]]; then
@@ -276,6 +331,9 @@ install_mboxmini() {
         echo "sudo systemctl restart mboxmini # Restart the service"
         echo "sudo systemctl status mboxmini  # Check service status"
     fi
+    
+    echo -e "\nTo view logs:"
+    echo "docker compose logs -f"
 }
 
 # Main script
