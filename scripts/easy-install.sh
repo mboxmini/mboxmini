@@ -124,6 +124,7 @@ create_env_file() {
         cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.backup"
     fi
 
+    # Create environment file with placeholders
     cat > "$INSTALL_DIR/.env" << 'ENVFILE'
 # Security
 API_KEY=__API_KEY__
@@ -144,34 +145,40 @@ ADMIN_EMAIL=admin@mboxmini.local
 ADMIN_PASSWORD=__ADMIN_PASSWORD__
 ENVFILE
 
-    # Replace placeholders with actual values
-    sed -i \
-        -e "s|__API_KEY__|${API_KEY}|g" \
-        -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
-        -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
-        -e "s|__API_PORT__|${API_PORT:-$DEFAULT_API_PORT}|g" \
-        -e "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|g" \
-        "$INSTALL_DIR/.env"
+    # Create a temporary file for sed operations
+    TEMP_FILE=$(mktemp)
+    cp "$INSTALL_DIR/.env" "$TEMP_FILE"
+
+    # Replace placeholders one by one
+    sed "s|__API_KEY__|${API_KEY}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    cp "$INSTALL_DIR/.env" "$TEMP_FILE"
+    
+    sed "s|__JWT_SECRET__|${JWT_SECRET}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    cp "$INSTALL_DIR/.env" "$TEMP_FILE"
+    
+    sed "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    cp "$INSTALL_DIR/.env" "$TEMP_FILE"
+    
+    sed "s|__API_PORT__|${API_PORT:-$DEFAULT_API_PORT}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    cp "$INSTALL_DIR/.env" "$TEMP_FILE"
+    
+    sed "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+
+    # Clean up
+    rm -f "$TEMP_FILE"
     
     chmod 600 "$INSTALL_DIR/.env"
     
-    # Create credentials file template
-    cat > "$INSTALL_DIR/admin_credentials.txt" << 'CREDS'
+    # Create credentials file
+    cat > "$INSTALL_DIR/admin_credentials.txt" << EOF
 MboxMini Admin Credentials
 -------------------------
 Email: admin@mboxmini.local
-Password: __ADMIN_PASSWORD__
-API Key: __API_KEY__
+Password: ${ADMIN_PASSWORD}
+API Key: ${API_KEY}
 
 Please change these credentials after first login.
-CREDS
-
-    # Replace placeholders in credentials file
-    sed -i \
-        -e "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|g" \
-        -e "s|__API_KEY__|${API_KEY}|g" \
-        "$INSTALL_DIR/admin_credentials.txt"
-    
+EOF
     chmod 600 "$INSTALL_DIR/admin_credentials.txt"
 }
 

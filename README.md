@@ -43,6 +43,21 @@ The script will:
 - 🚀 Start the application
 - 🔧 Configure auto-start on boot
 
+To customize the installation, you can use additional options:
+```bash
+# Custom ports
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | sudo bash -s -- --api-port 8081 --frontend-port 3001
+
+# Force reinstall with custom ports
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | sudo bash -s -- --force --api-port 8081 --frontend-port 3001
+```
+
+Available options:
+- `--force` - Force reinstallation (removes existing installation)
+- `--api-port PORT` - Set API port (default: 8080)
+- `--frontend-port PORT` - Set frontend port (default: 3000)
+- `install_dir` - Optional installation directory (default: `/opt/mboxmini` on Linux, `~/mboxmini` on macOS)
+
 To update to the latest version, simply run the same script again:
 ```bash
 ./scripts/easy-install.sh
@@ -66,13 +81,6 @@ The force reinstall will:
 - 🧹 Remove existing installation
 - 🚫 Stop and remove services
 - ✨ Perform fresh installation
-
-Script options:
-```bash
-Usage: ./scripts/easy-install.sh [-f|--force] [install_dir]
-  -f, --force    Force reinstallation (removes existing installation)
-  install_dir    Optional installation directory (default: /opt/mboxmini on Linux, ~/mboxmini on macOS)
-```
 
 ### Manual Installation (Pre-built Images)
 
