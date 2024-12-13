@@ -348,20 +348,117 @@ check_sudo() {
     fi
 }
 
-# Function to detect Docker installation type
+# Function to detect and handle Docker installation
 detect_docker_installation() {
     print_info "Checking Docker installation..."
     
-    # Check if Docker is installed via snap
-    if command -v snap >/dev/null && snap list docker >/dev/null 2>&1; then
-        DOCKER_IS_SNAP=true
-        print_info "Detected Docker installed via snap"
-        
-        # For snap installations, we'll use a bridge directory in home
-        DOCKER_COMPOSE_PATH="$HOME/.mboxmini"
+    # First check if Docker is installed at all
+    if ! command -v docker >/dev/null; then
+        print_info "Docker is not installed. Installing from official repository..."
+        install_official_docker
+        return
+    fi
+    
+    # Check if Docker is running through snap or installed via apt
+    local needs_migration=false
+    if readlink -f $(which docker) | grep -q "snap"; then
+        print_info "Detected Docker running via snap"
+        needs_migration=true
+    elif docker info 2>&1 | grep -q "snap"; then
+        print_info "Detected Docker running via snap (installed through package manager)"
+        needs_migration=true
+    elif ! dpkg -l | grep -q "^ii.*docker-ce"; then
+        print_info "Docker is not from official repository"
+        needs_migration=true
+    fi
+    
+    if [ "$needs_migration" = true ]; then
+        print_warning "Current Docker installation needs to be migrated to official repository"
+        print_warning "This is required due to known issues with snap version:"
+        print_warning "https://github.com/canonical/docker-snap/issues/7"
+        echo
+        print_info "Proceeding with Docker migration..."
+        migrate_docker_installation
     else
-        DOCKER_IS_SNAP=false
-        DOCKER_COMPOSE_PATH="$INSTALL_DIR"
+        print_info "Detected Docker installed from official repository"
+    fi
+}
+
+# Function to install official Docker
+install_official_docker() {
+    print_info "Installing Docker from official repository..."
+    
+    # Add Docker's official GPG key
+    print_info "Adding Docker's official GPG key..."
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    
+    # Add Docker repository
+    print_info "Adding Docker repository..."
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    # Update apt and install Docker
+    print_info "Installing Docker packages..."
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    
+    # Add user to docker group
+    print_info "Adding user to docker group..."
+    sudo usermod -aG docker "$USER"
+    
+    # Start and enable Docker service
+    print_info "Starting Docker service..."
+    sudo systemctl enable --now docker
+    
+    # Wait for Docker to be ready
+    print_info "Waiting for Docker to be ready..."
+    for i in {1..30}; do
+        if docker info >/dev/null 2>&1; then
+            break
+        fi
+        echo -n "."
+        sleep 1
+    done
+    echo
+    
+    print_info "Docker installation completed successfully!"
+}
+
+# Function to migrate from snap/apt Docker to official Docker
+migrate_docker_installation() {
+    print_info "Starting Docker migration..."
+    
+    # Stop any running containers
+    print_info "Stopping running containers..."
+    docker compose down 2>/dev/null || true
+    
+    # Remove snap Docker if installed
+    if command -v snap >/dev/null && snap list docker >/dev/null 2>&1; then
+        print_info "Removing Docker snap..."
+        sudo snap remove docker
+    fi
+    
+    # Remove apt Docker packages if installed
+    if dpkg -l | grep -q "docker\.io\|docker-engine"; then
+        print_info "Removing old Docker packages..."
+        sudo apt-get remove -y docker docker-engine docker.io containerd runc
+    fi
+    
+    # Install official Docker
+    install_official_docker
+    
+    # Verify installation
+    if ! docker info >/dev/null 2>&1; then
+        print_error "Docker installation failed. Please try installing manually:"
+        echo "https://docs.docker.com/engine/install/ubuntu/"
+        exit 1
+    fi
+    
+    print_info "Docker migration completed successfully!"
+    
+    # Check if we need to restart the shell for group changes
+    if ! groups | grep -q docker; then
+        print_warning "Please run the following command to update group membership:"
+        echo "newgrp docker"
     fi
 }
 
@@ -528,6 +625,9 @@ main() {
         exit 1
     fi
     
+    # Check sudo access early
+    check_sudo
+    
     # Detect OS and Docker installation
     detect_os
     detect_docker_installation
@@ -564,9 +664,6 @@ main() {
     
     # Set installation directory
     INSTALL_DIR="${CUSTOM_INSTALL_DIR:-$DEFAULT_DIR}"
-    
-    # Check sudo access early
-    check_sudo
     
     if check_installation; then
         if [[ "$FORCE_REINSTALL" == true ]]; then
