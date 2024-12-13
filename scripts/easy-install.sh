@@ -187,24 +187,29 @@ ADMIN_EMAIL=admin@mboxmini.local
 ADMIN_PASSWORD=__ADMIN_PASSWORD__
 ENVFILE
 
+    # Escape special characters in the secrets
+    API_KEY_ESCAPED=$(printf '%s\n' "$API_KEY" | sed 's/[&/\]/\\&/g')
+    JWT_SECRET_ESCAPED=$(printf '%s\n' "$JWT_SECRET" | sed 's/[&/\]/\\&/g')
+    ADMIN_PASSWORD_ESCAPED=$(printf '%s\n' "$ADMIN_PASSWORD" | sed 's/[&/\]/\\&/g')
+
     # Create a temporary file for sed operations
     TEMP_FILE=$(mktemp)
     cp "$INSTALL_DIR/.env" "$TEMP_FILE"
 
-    # Replace placeholders one by one
-    sed "s|__API_KEY__|${API_KEY}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    # Replace placeholders one by one with escaped values
+    sed "s|__API_KEY__|${API_KEY_ESCAPED}|g" "$TEMP_FILE" > "$INSTALL_DIR/.env"
     cp "$INSTALL_DIR/.env" "$TEMP_FILE"
     
-    sed "s|__JWT_SECRET__|${JWT_SECRET}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    sed "s|__JWT_SECRET__|${JWT_SECRET_ESCAPED}|g" "$TEMP_FILE" > "$INSTALL_DIR/.env"
     cp "$INSTALL_DIR/.env" "$TEMP_FILE"
     
-    sed "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    sed "s|__ADMIN_PASSWORD__|${ADMIN_PASSWORD_ESCAPED}|g" "$TEMP_FILE" > "$INSTALL_DIR/.env"
     cp "$INSTALL_DIR/.env" "$TEMP_FILE"
     
-    sed "s|__API_PORT__|${API_PORT:-$DEFAULT_API_PORT}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    sed "s|__API_PORT__|${API_PORT:-$DEFAULT_API_PORT}|g" "$TEMP_FILE" > "$INSTALL_DIR/.env"
     cp "$INSTALL_DIR/.env" "$TEMP_FILE"
     
-    sed "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|" "$TEMP_FILE" > "$INSTALL_DIR/.env"
+    sed "s|__FRONTEND_PORT__|${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}|g" "$TEMP_FILE" > "$INSTALL_DIR/.env"
 
     # Clean up
     rm -f "$TEMP_FILE"
