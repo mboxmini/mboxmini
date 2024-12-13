@@ -470,8 +470,8 @@ services:
     ports:
       - "${API_PORT:-8080}:8080"
     volumes:
-      - ${HOST_DATA_PATH:-./minecraft-data}:${DATA_PATH:-/minecraft-data}
-      - ./data:${DB_PATH:-/data}
+      - ${INSTALL_DIR}/minecraft-data:${DATA_PATH:-/minecraft-data}
+      - ${INSTALL_DIR}/data:${DB_PATH:-/data}
     environment:
       - API_KEY=${API_KEY}
       - JWT_SECRET=${JWT_SECRET}
@@ -480,6 +480,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@mboxmini.local}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - HOST_DATA_PATH=${INSTALL_DIR}/minecraft-data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
@@ -488,6 +489,10 @@ services:
       start_period: 5s
     restart: unless-stopped
 DOCKERCOMPOSE
+
+    # Replace INSTALL_DIR in docker-compose.yml
+    sed -i.bak "s|\${INSTALL_DIR}|$INSTALL_DIR|g" "$INSTALL_DIR/docker-compose.yml"
+    rm -f "$INSTALL_DIR/docker-compose.yml.bak"
     
     # Setup snap Docker access if needed
     setup_snap_docker_access

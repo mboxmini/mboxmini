@@ -9,6 +9,10 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Get the absolute path of the script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 # Print with color
 print_status() {
     echo -e "${GREEN}==>${NC} $1"
@@ -56,28 +60,38 @@ generate_secrets() {
 # Create environment file
 create_env_file() {
     print_status "Creating environment file..."
-    if [ -f .env ]; then
+    if [ -f "$PROJECT_DIR/.env" ]; then
         print_warning "Environment file already exists. Backing up to .env.backup"
-        cp .env .env.backup
+        cp "$PROJECT_DIR/.env" "$PROJECT_DIR/.env.backup"
     fi
 
-    cat > .env << EOF
+    cat > "$PROJECT_DIR/.env" << EOF
 API_KEY=${API_KEY}
 JWT_SECRET=${JWT_SECRET}
-HOST_DATA_PATH=./minecraft-data
+HOST_DATA_PATH=${PROJECT_DIR}/minecraft-data
+DATA_PATH=/minecraft-data
+DB_PATH=/data/mboxmini.db
+NODE_ENV=development
 EOF
 }
 
 # Create necessary directories
 create_directories() {
     print_status "Creating necessary directories..."
-    mkdir -p data minecraft-data
-    chmod 777 data minecraft-data
+    mkdir -p "$PROJECT_DIR/data" "$PROJECT_DIR/minecraft-data"
+    chmod 777 "$PROJECT_DIR/data" "$PROJECT_DIR/minecraft-data"
 }
 
 # Build and start services
 start_services() {
     print_status "Building and starting services..."
+    cd "$PROJECT_DIR"
+    
+    # Update docker-compose.build.yml with absolute paths
+    sed -i.bak "s|\\./minecraft-data:|${PROJECT_DIR}/minecraft-data:|g" docker-compose.build.yml
+    sed -i.bak "s|\\./data:|${PROJECT_DIR}/data:|g" docker-compose.build.yml
+    rm -f docker-compose.build.yml.bak
+    
     docker compose -f docker-compose.build.yml up --build -d
 
     print_status "Waiting for services to be ready..."
@@ -108,14 +122,14 @@ create_admin_user() {
                 -d "{\"username\":\"$admin_email\",\"password\":\"$ADMIN_PASSWORD\"}" > /dev/null; then
                 
                 # Save credentials to file
-                cat > admin_credentials.txt << EOF
+                cat > "$PROJECT_DIR/admin_credentials.txt" << EOF
 Admin Credentials
 ----------------
 Email: $admin_email
 Password: $ADMIN_PASSWORD
 API Key: $API_KEY
 EOF
-                chmod 600 admin_credentials.txt
+                chmod 600 "$PROJECT_DIR/admin_credentials.txt"
                 return 0
             fi
             print_error "Failed to create admin user. API returned an error."
@@ -136,6 +150,9 @@ EOF
 # Main setup process
 main() {
     print_status "Starting MboxMini setup..."
+    
+    # Change to project directory
+    cd "$PROJECT_DIR"
 
     check_docker
     check_docker_compose
@@ -149,7 +166,7 @@ main() {
     echo -e "\nMboxMini is now running!"
     echo -e "Frontend URL: ${GREEN}http://localhost:3000${NC}"
     echo -e "Backend URL: ${GREEN}http://localhost:8080${NC}"
-    echo -e "\nAdmin credentials have been saved to: ${YELLOW}admin_credentials.txt${NC}"
+    echo -e "\nAdmin credentials have been saved to: ${YELLOW}$PROJECT_DIR/admin_credentials.txt${NC}"
     echo -e "Login with:"
     echo -e "Email: ${GREEN}admin@mboxmini.local${NC}"
     echo -e "Password: ${GREEN}${ADMIN_PASSWORD}${NC}"
