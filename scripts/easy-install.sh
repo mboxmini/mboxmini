@@ -459,7 +459,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      - REACT_APP_API_URL=http://$HOST:${API_PORT:-8080}
+      - VITE_API_PORT=${API_PORT:-8080}
     depends_on:
       api:
         condition: service_healthy

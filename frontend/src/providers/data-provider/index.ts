@@ -1,7 +1,16 @@
 import { DataProvider } from "@refinedev/core";
 import { axiosInstance } from "@/providers/axios";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+// Get the API URL from environment variable or construct it from window.location
+const getApiUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  const port = import.meta.env.VITE_API_PORT || '8080';
+  return `http://${window.location.hostname}:${port}`;
+};
+
+const API_URL = getApiUrl();
 
 export const dataProvider: DataProvider = {
   getList: async ({ resource }) => {
