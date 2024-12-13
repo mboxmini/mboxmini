@@ -185,6 +185,9 @@ NODE_ENV=production
 # Admin Credentials
 ADMIN_EMAIL=admin@mboxmini.local
 ADMIN_PASSWORD=__ADMIN_PASSWORD__
+
+# Host Configuration
+HOST=\${HOSTNAME:-localhost}
 ENVFILE
 
     # Escape special characters in the secrets
@@ -456,7 +459,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      - REACT_APP_API_URL=http://localhost:${API_PORT:-8080}
+      - REACT_APP_API_URL=http://$HOST:${API_PORT:-8080}
     depends_on:
       api:
         condition: service_healthy
