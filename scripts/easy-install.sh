@@ -840,5 +840,98 @@ DOCKERCOMPOSE
     fi
 }
 
+# Function to setup Docker permissions
+setup_docker_permissions() {
+    print_info "Setting up Docker permissions..."
+    
+    # Check if user is in docker group
+    if ! groups | grep -q docker; then
+        print_info "Adding user to docker group..."
+        sudo usermod -aG docker "$USER"
+        
+        print_warning "You need to log out and back in for the group changes to take effect."
+        print_warning "For now, we'll use a temporary solution to access Docker."
+        
+        # Temporary solution: use sudo for docker commands
+        if ! sudo docker info >/dev/null 2>&1; then
+            print_error "Failed to access Docker. Please check Docker installation."
+            exit 1
+        fi
+        
+        # Set DOCKER_SOCKET_WORKAROUND for other functions to use
+        DOCKER_SOCKET_WORKAROUND=true
+    else
+        DOCKER_SOCKET_WORKAROUND=false
+    fi
+    
+    # Ensure docker.sock has correct permissions
+    if [ ! -w "/var/run/docker.sock" ]; then
+        print_info "Setting permissions on docker.sock..."
+        sudo chmod 666 /var/run/docker.sock
+    fi
+}
+
+# Modify the start_services function
+start_services() {
+    print_info "Starting services..."
+    
+    # Change to the correct directory
+    cd "$INSTALL_DIR" || exit 1
+    
+    # Start services with appropriate permissions
+    if [ "$DOCKER_SOCKET_WORKAROUND" = true ]; then
+        print_info "Using sudo to start services (one-time workaround)..."
+        if ! sudo docker compose up -d; then
+            print_error "Failed to start services. Check the logs with: cd $INSTALL_DIR && sudo docker compose logs"
+            exit 1
+        fi
+    else
+        if ! docker compose up -d; then
+            print_error "Failed to start services. Check the logs with: cd $INSTALL_DIR && docker compose logs"
+            exit 1
+        fi
+    fi
+}
+
+# Add to main function after detect_docker_installation
+main() {
+    # ... existing checks ...
+    
+    # Setup Docker permissions early
+    setup_docker_permissions
+    
+    # ... rest of main function ...
+}
+
+# Modify the systemd service to ensure proper permissions
+setup_service() {
+    print_info "Setting up auto-start service..."
+    
+    # Create systemd service for Linux
+    sudo tee /etc/systemd/system/mboxmini.service > /dev/null << SERVICE
+[Unit]
+Description=MBoxMini Minecraft Server Manager
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${INSTALL_DIR}/.env
+Environment=COMPOSE_PROJECT_NAME=mboxmini
+ExecStartPre=/bin/sh -c 'chmod 666 /var/run/docker.sock'
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=$USER
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+    
+    sudo systemctl daemon-reload
+    sudo systemctl enable mboxmini.service
+}
+
 # Run main function with all arguments
 main "$@" 
