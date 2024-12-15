@@ -2,7 +2,7 @@
 
 # Configuration
 DOCKER_HUB_USERNAME="intecco"
-VERSION="0.1.0"
+VERSION="0.2.0"
 UI_IMAGE="${DOCKER_HUB_USERNAME}/mboxmini-ui"
 API_IMAGE="${DOCKER_HUB_USERNAME}/mboxmini-api"
 
