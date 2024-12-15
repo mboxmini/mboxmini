@@ -22,7 +22,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - mboxmini-data:/data
-      - ./data:/app/data
+      - /Users/lzbikowski/Workspace_opensource_ai/mboxmini/data:/app/data
     environment:
       - API_KEY=${API_KEY}
       - JWT_SECRET=${JWT_SECRET}
