@@ -8,7 +8,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - REACT_APP_API_URL=http://localhost:8080
+      - VITE_API_PORT=8080
     depends_on:
       api:
         condition: service_healthy
@@ -21,12 +21,27 @@ services:
       - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - mboxmini-data:/data
-      - ./data:/app/data
+      - ${PWD}/minecraft-data:/minecraft-data
+      - ${PWD}/data:/app/data
     environment:
       - API_KEY=${API_KEY}
       - JWT_SECRET=${JWT_SECRET}
-      - DATA_PATH=${HOST_DATA_PATH}
+      - DATA_PATH=/minecraft-data
+      - DB_PATH=/app/data/mboxmini.db
+      - NODE_ENV=${NODE_ENV:-development}
+      - HOST_DATA_PATH=${PWD}/minecraft-data
+      - MINECRAFT_DATA_PATH=/minecraft-data
+    command: >
+      sh -c "
+        echo '=== Debug Info ===' &&
+        echo 'PWD:' $PWD &&
+        echo 'HOST_DATA_PATH:' $HOST_DATA_PATH &&
+        echo 'DATA_PATH:' $DATA_PATH &&
+        echo 'MINECRAFT_DATA_PATH:' $MINECRAFT_DATA_PATH &&
+        echo 'DB_PATH:' $DB_PATH &&
+        echo '================' &&
+        ./server
+      "
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 10s
@@ -46,4 +61,4 @@ services:
     pull_policy: always
 
 volumes:
-  mboxmini-data: 
+  mboxmini-data:

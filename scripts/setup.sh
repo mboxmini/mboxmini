@@ -65,21 +65,38 @@ create_env_file() {
         cp "$PROJECT_DIR/.env" "$PROJECT_DIR/.env.backup"
     fi
 
+    print_status "Debug: Current working directory: $(pwd)"
+    print_status "Debug: PROJECT_DIR: $PROJECT_DIR"
+    print_status "Debug: PWD: $PWD"
+
     cat > "$PROJECT_DIR/.env" << EOF
+# Security
 API_KEY=${API_KEY}
 JWT_SECRET=${JWT_SECRET}
-HOST_DATA_PATH=${PROJECT_DIR}/minecraft-data
+
+# Paths
+HOST_DATA_PATH=\${PWD}/minecraft-data
 DATA_PATH=/minecraft-data
-DB_PATH=/data/mboxmini.db
+MINECRAFT_DATA_PATH=/minecraft-data
+DB_PATH=/app/data/mboxmini.db
+
+# Server Configuration
 NODE_ENV=development
 EOF
+
+    print_status "Debug: Environment file contents:"
+    cat "$PROJECT_DIR/.env"
 }
 
 # Create necessary directories
 create_directories() {
     print_status "Creating necessary directories..."
+    print_status "Debug: Creating directories in PROJECT_DIR: $PROJECT_DIR"
     mkdir -p "$PROJECT_DIR/data" "$PROJECT_DIR/minecraft-data"
     chmod 777 "$PROJECT_DIR/data" "$PROJECT_DIR/minecraft-data"
+    
+    print_status "Debug: Directory contents:"
+    ls -la "$PROJECT_DIR/data" "$PROJECT_DIR/minecraft-data"
 }
 
 # Build and start services
@@ -87,10 +104,15 @@ start_services() {
     print_status "Building and starting services..."
     cd "$PROJECT_DIR"
     
-    # Update docker-compose.build.yml with absolute paths
-    sed -i.bak "s|\\./minecraft-data:|${PROJECT_DIR}/minecraft-data:|g" docker-compose.build.yml
-    sed -i.bak "s|\\./data:|${PROJECT_DIR}/data:|g" docker-compose.build.yml
-    rm -f docker-compose.build.yml.bak
+    print_status "Debug: Current working directory before docker-compose: $(pwd)"
+    print_status "Debug: Contents of current directory:"
+    ls -la
+    
+    print_status "Debug: Environment variables:"
+    echo "PWD: $PWD"
+    echo "HOST_DATA_PATH: ${PWD}/minecraft-data"
+    echo "DATA_PATH: /minecraft-data"
+    echo "MINECRAFT_DATA_PATH: /minecraft-data"
     
     docker compose -f docker-compose.build.yml up --build -d
 

@@ -42,6 +42,13 @@ func NewManager(dataPath string, portStart, portEnd int) (*Manager, error) {
 		return nil, fmt.Errorf("failed to create Docker client: %v", err)
 	}
 
+	// Ensure data directory exists
+	log.Printf("Ensuring data directory exists: %s", dataPath)
+	if err := os.MkdirAll(dataPath, 0755); err != nil {
+		log.Printf("Error creating data directory: %v", err)
+		return nil, fmt.Errorf("failed to create data directory: %v", err)
+	}
+
 	m := &Manager{
 		client:    cli,
 		dataPath:  dataPath,
@@ -124,8 +131,21 @@ func (m *Manager) CreateServer(name, version, memory string) (string, error) {
 	io.Copy(io.Discard, reader)
 	reader.Close()
 
+	log.Printf("Creating directory: %s using Alpine container", serverDataDir)
+	log.Printf("Host data path: %s", m.dataPath)
+	
+	// Ensure base data directory exists
+	if err := os.MkdirAll(m.dataPath, 0755); err != nil {
+		log.Printf("Error creating base data directory: %v", err)
+		return "", fmt.Errorf("failed to create base data directory: %v", err)
+	}
+
 	// Use alpine container to create directory
-	mkdirCmd := fmt.Sprintf("mkdir -p %s", serverDataDir)
+	serverName := strings.TrimPrefix(serverID, "mboxmini-")
+	containerServerDir := filepath.Join("/data", serverName)
+	mkdirCmd := fmt.Sprintf("mkdir -p %s", containerServerDir)
+	log.Printf("Directory creation command: %s", mkdirCmd)
+
 	resp, err := m.client.ContainerCreate(
 		context.Background(),
 		&container.Config{
@@ -137,8 +157,8 @@ func (m *Manager) CreateServer(name, version, memory string) (string, error) {
 			Mounts: []mount.Mount{
 				{
 					Type:   mount.TypeBind,
-					Source: filepath.Dir(m.dataPath),
-					Target: filepath.Dir(m.dataPath),
+					Source: m.dataPath,
+					Target: "/data",
 				},
 			},
 		},
@@ -148,15 +168,18 @@ func (m *Manager) CreateServer(name, version, memory string) (string, error) {
 	)
 	if err != nil {
 		log.Printf("Error creating directory container: %v", err)
+		log.Printf("Mount configuration - Source: %s, Target: %s", m.dataPath, "/data")
 		return "", fmt.Errorf("failed to create directory container: %v", err)
 	}
 
+	log.Printf("Starting directory creation container with ID: %s", resp.ID)
 	if err := m.client.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
 		log.Printf("Error starting directory container: %v", err)
 		return "", fmt.Errorf("failed to start directory container: %v", err)
 	}
 
 	// Wait for container to finish
+	log.Printf("Waiting for directory container to complete...")
 	statusCh, errCh := m.client.ContainerWait(context.Background(), resp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
@@ -164,7 +187,8 @@ func (m *Manager) CreateServer(name, version, memory string) (string, error) {
 			log.Printf("Error waiting for directory container: %v", err)
 			return "", fmt.Errorf("failed waiting for directory container: %v", err)
 		}
-	case <-statusCh:
+	case status := <-statusCh:
+		log.Printf("Directory container finished with status code: %d", status.StatusCode)
 	}
 
 	env := []string{
@@ -173,7 +197,7 @@ func (m *Manager) CreateServer(name, version, memory string) (string, error) {
 		"TYPE=VANILLA",
 		fmt.Sprintf("MEMORY=%s", memory),
 	}
-	log.Printf("Environment variables: %v", env)
+	log.Printf("Minecraft container environment variables: %v", env)
 
 	// Create Minecraft server container
 	containerConfig := &container.Config{
