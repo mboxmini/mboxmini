@@ -476,74 +476,62 @@ verify_installation() {
     return 1
 }
 
-# Update the installation function to include verification
+# Add function to fetch files from GitHub
+fetch_from_github() {
+    local branch="$1"
+    local file="$2"
+    local output="$3"
+    
+    print_info "Fetching $file from branch $branch..."
+    if ! curl -fsSL "https://raw.githubusercontent.com/mboxmini/mboxmini/${branch}/${file}" -o "$output"; then
+        print_error "Failed to fetch $file from branch $branch"
+        return 1
+    fi
+    return 0
+}
+
+# Add function to download required files
+download_files() {
+    local branch="$1"
+    print_info "Downloading MboxMini files from branch: $branch"
+    
+    # Create temporary directory for downloads
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    
+    # Download required files
+    fetch_from_github "$branch" "docker-compose.yml" "$temp_dir/docker-compose.yml" || return 1
+    fetch_from_github "$branch" ".env.example" "$temp_dir/.env" || return 1
+    
+    # Move files to installation directory
+    mv "$temp_dir/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
+    mv "$temp_dir/.env" "$INSTALL_DIR/.env"
+    
+    # Cleanup
+    rm -rf "$temp_dir"
+    
+    print_info "Files downloaded successfully"
+    return 0
+}
+
+# Update installation function to use downloaded files
 install_mboxmini() {
     print_info "Starting MboxMini installation..."
     
     # Create directories with proper permissions
     create_directories
     
+    # Download files from specified branch
+    if ! download_files "$BRANCH"; then
+        print_error "Failed to download required files"
+        return 1
+    fi
+    
     # Generate secrets
     generate_secrets
     
     # Create environment file
     create_env_file
-    
-    # Create docker-compose.yml
-    print_info "Creating docker-compose.yml..."
-    cat > "$INSTALL_DIR/docker-compose.yml" << 'DOCKERCOMPOSE'
-version: '3.8'
-
-services:
-  ui:
-    image: intecco/mboxmini-ui:latest
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    environment:
-      - VITE_API_PORT=${API_PORT:-8080}
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  api:
-    image: intecco/mboxmini-api:latest
-    ports:
-      - "${API_PORT:-8080}:8080"
-    volumes:
-      - ${INSTALL_DIR}/minecraft-data:${DATA_PATH:-/minecraft-data}
-      - ${INSTALL_DIR}/data:${DB_PATH:-/data}
-    environment:
-      - API_KEY=${API_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - DATA_PATH=${DATA_PATH:-/minecraft-data}
-      - DB_PATH=${DB_PATH:-/data/mboxmini.db}
-      - NODE_ENV=${NODE_ENV:-production}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@mboxmini.local}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - HOST_DATA_PATH=${INSTALL_DIR}/minecraft-data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-DOCKERCOMPOSE
-
-    # Replace INSTALL_DIR in docker-compose.yml
-    sed -i.bak "s|\${INSTALL_DIR}|$INSTALL_DIR|g" "$INSTALL_DIR/docker-compose.yml"
-    rm -f "$INSTALL_DIR/docker-compose.yml.bak"
     
     # Setup snap Docker access if needed
     setup_snap_docker_access
@@ -610,7 +598,7 @@ print_success_message() {
     fi
 }
 
-# Main function
+# Update main function to validate branch
 main() {
     # Check if running as root
     if [ "$EUID" -eq 0 ]; then
@@ -643,6 +631,12 @@ main() {
                 ;;
             --branch)
                 BRANCH="$2"
+                # Validate branch
+                if ! curl -fsSL "https://raw.githubusercontent.com/mboxmini/mboxmini/${BRANCH}/version.txt" >/dev/null 2>&1; then
+                    print_error "Invalid branch: ${BRANCH}"
+                    print_error "Please specify a valid branch (main, develop)"
+                    exit 1
+                fi
                 shift 2
                 ;;
             *)
@@ -651,6 +645,8 @@ main() {
                 ;;
         esac
     done
+    
+    print_info "Using branch: $BRANCH"
     
     # Set installation directory
     INSTALL_DIR="${CUSTOM_INSTALL_DIR:-$DEFAULT_DIR}"
@@ -681,7 +677,7 @@ main() {
     fi
 }
 
-# Print usage information
+# Update print_usage to include branch information
 print_usage() {
     echo "Usage: $0 [-f|--force] [--api-port PORT] [--frontend-port PORT] [--branch BRANCH] [install_dir]"
     echo

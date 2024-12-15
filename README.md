@@ -26,8 +26,11 @@
 The easiest way to get started is using our one-line installation script:
 
 ```bash
-# For macOS and Linux:
+# For macOS and Linux (using main branch):
 curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash
+
+# Using development branch:
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash -s -- --branch develop
 ```
 
 The script will:
@@ -43,14 +46,15 @@ To customize the installation, you can use additional options:
 # Custom ports
 curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash -s -- --api-port 8081 --frontend-port 3001
 
-# Force reinstall with custom ports
-curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash -s -- --force --api-port 8081 --frontend-port 3001
+# Force reinstall with custom ports and specific branch
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash -s -- --force --api-port 8081 --frontend-port 3001 --branch develop
 ```
 
 Available options:
 - `--force` - Force reinstallation (removes existing installation)
 - `--api-port PORT` - Set API port (default: 8080)
 - `--frontend-port PORT` - Set frontend port (default: 3000)
+- `--branch BRANCH` - Set GitHub branch to use (default: main)
 - `install_dir` - Optional installation directory (default: `/opt/mboxmini` on Linux, `~/mboxmini` on macOS)
 
 To update to the latest version, simply run the installation script again. It will detect the existing installation and offer to update.
