@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useShow, useNavigation } from "@refinedev/core";
 import { Show } from "@refinedev/antd";
-import { Card, Space, Button, Tag, message, Row, Col, Divider, Modal, Checkbox, Tooltip, theme } from "antd";
+import { Card, Space, Button, Tag, message, Row, Col, Divider, Modal, Checkbox, Tooltip, Typography, Descriptions, theme } from "antd";
 import { PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined, LoadingOutlined, ExclamationCircleOutlined, CopyOutlined } from "@ant-design/icons";
 import { Server } from "@/interfaces";
 import { startServer, stopServer, deleteServer } from "@/api/servers";
 import { Console } from "@/components/console";
 import { PlayerList } from "@/components/player-list";
+
+const { Title } = Typography;
 
 export const ServerShow: React.FC = () => {
   const { queryResult } = useShow<Server>();
@@ -17,24 +19,15 @@ export const ServerShow: React.FC = () => {
   const { push } = useNavigation();
   const { token } = theme.useToken();
 
-  // Auto-refresh scheduler
+  // Smart refresh scheduler
   useEffect(() => {
+    const isStateChanging = record?.status === "starting" || record?.status === "stopping";
     const interval = setInterval(() => {
       refetch();
-    }, 30000); // 30 seconds
+    }, isStateChanging ? 2000 : 30000); // 2s during state changes, 30s otherwise
 
     return () => clearInterval(interval);
-  }, [refetch]);
-
-  // Existing effect for status polling
-  useEffect(() => {
-    if (record?.status === "starting" || record?.status === "stopping") {
-      const interval = setInterval(() => {
-        refetch();
-      }, 2000); // More frequent updates during status changes
-      return () => clearInterval(interval);
-    }
-  }, [record?.status, refetch]);
+  }, [refetch, record?.status]);
 
   const handleStartServer = async () => {
     if (!record) return;
@@ -158,49 +151,86 @@ export const ServerShow: React.FC = () => {
         <Col flex="auto">
           <Space direction="vertical" style={{ width: "100%" }}>
             <Card>
-              <Space direction="vertical" style={{ width: "100%" }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <h2>{record?.name}</h2>
-                    <Tag color={getStatusColor(record?.status || "")}>
-                      {record?.status?.toUpperCase()}
-                    </Tag>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div>Version: {record?.version}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-                      <span style={{ 
-                        color: record?.status === "running" ? 'inherit' : token.colorTextDisabled 
-                      }}>
-                        Address: localhost:{record?.port}
-                      </span>
-                      <Tooltip title={record?.status === "running" ? "Copy address" : "Server is not running"}>
-                        <Button
-                          type="text"
-                          icon={<CopyOutlined />}
-                          size="small"
-                          disabled={record?.status !== "running"}
-                          onClick={() => {
-                            navigator.clipboard.writeText(`localhost:${record?.port}`);
-                            message.success('Address copied to clipboard');
-                          }}
-                        />
-                      </Tooltip>
-                    </div>
-                  </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <Space size="middle" align="center">
+                  <Title level={3} style={{ margin: 0 }}>{record?.name}</Title>
+                  <Tag color={getStatusColor(record?.status || "")}>
+                    {record?.status?.toUpperCase()}
+                  </Tag>
+                </Space>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ 
+                    color: record?.status === "running" ? 'inherit' : token.colorTextDisabled 
+                  }}>
+                    Address: localhost:{record?.port}
+                  </span>
+                  <Tooltip title={record?.status === "running" ? "Copy address" : "Server is not running"}>
+                    <Button
+                      type="text"
+                      icon={<CopyOutlined />}
+                      size="small"
+                      disabled={record?.status !== "running"}
+                      onClick={() => {
+                        navigator.clipboard.writeText(`localhost:${record?.port}`);
+                        message.success('Address copied to clipboard');
+                      }}
+                    />
+                  </Tooltip>
                 </div>
-              </Space>
+              </div>
+
+              <Row gutter={16}>
+                <Col flex="1 1 600px" style={{ maxWidth: 'calc(100% - 332px)' }}>
+                  <Card type="inner" title="Server Configuration">
+                    <Descriptions column={{ xs: 1, sm: 2 }}>
+                      <Descriptions.Item label="Version">
+                        {record?.version || "Unknown"}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Type">
+                        {record?.type || "Unknown"}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Memory">
+                        {record?.memory || "Default"}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Docker Image">
+                        {record?.image || "Unknown"}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  </Card>
+
+                  <Card type="inner" title="Environment Variables" style={{ marginTop: '16px' }}>
+                    <Descriptions column={1}>
+                      {record?.env && Object.entries(record.env)
+                        .filter(([key]) => ![
+                          'GID',
+                          'JAVA_HOME',
+                          'JAVA_VERSION',
+                          'LANG',
+                          'LANGUAGE',
+                          'LC_ALL',
+                          'UID',
+                          'PATH'
+                        ].includes(key))
+                        .map(([key, value]) => (
+                          <Descriptions.Item key={key} label={key}>
+                            {String(value)}
+                          </Descriptions.Item>
+                        ))}
+                    </Descriptions>
+                  </Card>
+                </Col>
+                <Col flex="0 0 300px">
+                  <Card title="Players" style={{ height: "100%" }}>
+                    <PlayerList serverId={record?.id || ""} />
+                  </Card>
+                </Col>
+              </Row>
             </Card>
 
             <Card title="Console">
               <Console serverId={record?.id || ""} />
             </Card>
           </Space>
-        </Col>
-        <Col flex="300px">
-          <Card title="Players" style={{ height: "100%" }}>
-            <PlayerList serverId={record?.id || ""} />
-          </Card>
         </Col>
       </Row>
     </Show>

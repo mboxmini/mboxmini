@@ -5,6 +5,10 @@ export interface Server {
   version: string;
   port: number;
   players: string[];
+  type: string;
+  memory: string;
+  image: string;
+  env: Record<string, string>;
 }
 
 export interface CreateServerRequest {
