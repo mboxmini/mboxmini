@@ -47,14 +47,23 @@ detect_os() {
 # Print with color
 print_info() {
     echo -e "${GREEN}INFO: $1${NC}"
+    if [ -n "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/mboxmini.log" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >> "$INSTALL_DIR/mboxmini.log"
+    fi
 }
 
 print_warning() {
     echo -e "${YELLOW}WARNING: $1${NC}"
+    if [ -n "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/mboxmini.log" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: $1" >> "$INSTALL_DIR/mboxmini.log"
+    fi
 }
 
 print_error() {
     echo -e "${RED}ERROR: $1${NC}"
+    if [ -n "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/mboxmini.log" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$INSTALL_DIR/mboxmini.log"
+    fi
 }
 
 # Function to setup Docker permissions
@@ -224,23 +233,26 @@ ENVFILE
 create_directories() {
     print_info "Creating necessary directories..."
     
-    # Create installation directory with sudo if needed
+    # Create base installation directory
     if [[ "$NEED_SUDO" == true ]]; then
         sudo mkdir -p "$INSTALL_DIR"
-        sudo chown "$USER:$(id -gn)" "$INSTALL_DIR"
+        sudo chown -R "$USER:$(id -gn)" "$INSTALL_DIR"
     else
         mkdir -p "$INSTALL_DIR"
     fi
     chmod 755 "$INSTALL_DIR"
     
-    # Create data directories
-    mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/minecraft-data"
-    chmod 755 "$INSTALL_DIR/data" "$INSTALL_DIR/minecraft-data"
+    # Create data directories with proper permissions
+    for dir in "data" "minecraft-data" "logs"; do
+        mkdir -p "$INSTALL_DIR/$dir"
+        chmod 755 "$INSTALL_DIR/$dir"
+    done
     
-    if [[ "$DOCKER_IS_SNAP" == true ]]; then
-        mkdir -p "$DOCKER_COMPOSE_PATH"
-        chmod 755 "$DOCKER_COMPOSE_PATH"
-    fi
+    # Create log file
+    touch "$INSTALL_DIR/mboxmini.log"
+    chmod 644 "$INSTALL_DIR/mboxmini.log"
+    
+    print_info "Directories created successfully"
 }
 
 # Setup auto-start service
@@ -435,9 +447,38 @@ setup_snap_docker_access() {
     fi
 }
 
-# Function to install MboxMini
+# Add function to verify installation
+verify_installation() {
+    local retries=5
+    local wait=2
+    local counter=0
+    
+    print_info "Verifying installation..."
+    
+    while [ $counter -lt $retries ]; do
+        if curl -s "http://localhost:${API_PORT:-$DEFAULT_API_PORT}/health" > /dev/null; then
+            if curl -s "http://localhost:${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}" > /dev/null; then
+                print_info "Installation verified successfully!"
+                return 0
+            fi
+        fi
+        
+        counter=$((counter + 1))
+        if [ $counter -lt $retries ]; then
+            print_warning "Services not ready yet, waiting ${wait} seconds... (Attempt $counter/$retries)"
+            sleep $wait
+        fi
+    done
+    
+    print_error "Installation verification failed after $retries attempts"
+    print_error "Please check the logs for more details:"
+    print_error "docker compose logs -f"
+    return 1
+}
+
+# Update the installation function to include verification
 install_mboxmini() {
-    print_info "Installing MboxMini..."
+    print_info "Starting MboxMini installation..."
     
     # Create directories with proper permissions
     create_directories
@@ -464,6 +505,11 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
     image: intecco/mboxmini-api:latest
@@ -488,6 +534,11 @@ services:
       retries: 3
       start_period: 5s
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 DOCKERCOMPOSE
 
     # Replace INSTALL_DIR in docker-compose.yml
@@ -512,20 +563,22 @@ DOCKERCOMPOSE
         fi
     fi
     
-    # Wait for services to be ready
-    print_info "Waiting for services to start..."
-    API_PORT=${API_PORT:-$DEFAULT_API_PORT}
-    for i in {1..30}; do
-        if curl -s "http://localhost:${API_PORT}/health" >/dev/null; then
-            break
-        fi
-        echo -n "."
-        sleep 1
-    done
-    echo
+    # Verify installation
+    if ! verify_installation; then
+        print_error "Installation verification failed"
+        print_error "Please check the logs at $INSTALL_DIR/mboxmini.log"
+        return 1
+    fi
     
     # Print success message
+    print_success_message
+}
+
+# Add function to print success message
+print_success_message() {
     FRONTEND_PORT=${FRONTEND_PORT:-$DEFAULT_FRONTEND_PORT}
+    API_PORT=${API_PORT:-$DEFAULT_API_PORT}
+    
     print_info "Installation completed successfully!"
     echo -e "\nMboxMini is now running!"
     echo -e "Frontend URL: ${GREEN}http://localhost:${FRONTEND_PORT}${NC}"
@@ -536,26 +589,24 @@ DOCKERCOMPOSE
     echo -e "\nAPI Key: ${YELLOW}${API_KEY}${NC}"
     echo -e "These credentials are saved in: ${YELLOW}${INSTALL_DIR}/.env${NC}"
     
-    # Print management instructions
-    if [[ "$OS" == "macos" ]]; then
-        echo -e "\nTo manage the service:"
-        echo "launchctl start com.mboxmini.app   # Start the service"
-        echo "launchctl stop com.mboxmini.app    # Stop the service"
-        echo "launchctl unload ~/Library/LaunchAgents/com.mboxmini.app.plist  # Disable service"
-        echo "launchctl load ~/Library/LaunchAgents/com.mboxmini.app.plist    # Enable service"
-    else
-        echo -e "\nTo manage the service:"
-        echo "sudo systemctl start mboxmini   # Start the service"
-        echo "sudo systemctl stop mboxmini    # Stop the service"
-        echo "sudo systemctl restart mboxmini # Restart the service"
-        echo "sudo systemctl status mboxmini  # Check service status"
-    fi
-    
     echo -e "\nTo view logs:"
     if [[ "$DOCKER_IS_SNAP" == true ]]; then
         echo "cd $DOCKER_COMPOSE_PATH && docker compose logs -f"
     else
         echo "cd $INSTALL_DIR && docker compose logs -f"
+    fi
+    
+    echo -e "\nTo manage the service:"
+    if [[ "$OS" == "macos" ]]; then
+        echo "launchctl start com.mboxmini.app   # Start"
+        echo "launchctl stop com.mboxmini.app    # Stop"
+        echo "launchctl unload ~/Library/LaunchAgents/com.mboxmini.app.plist  # Disable"
+        echo "launchctl load ~/Library/LaunchAgents/com.mboxmini.app.plist    # Enable"
+    else
+        echo "sudo systemctl start mboxmini   # Start"
+        echo "sudo systemctl stop mboxmini    # Stop"
+        echo "sudo systemctl restart mboxmini # Restart"
+        echo "sudo systemctl status mboxmini  # Check status"
     fi
 }
 

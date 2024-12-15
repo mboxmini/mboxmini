@@ -25,20 +25,15 @@
 
 The easiest way to get started is using our one-line installation script:
 
-For macOS:
 ```bash
+# For macOS and Linux:
 curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash
 ```
 
-For Linux (requires sudo):
-```bash
-curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | sudo bash
-```
-
 The script will:
-- 🔍 Detect your operating system
+- 🔍 Detect your operating system and Docker setup
 - ⚙️ Configure appropriate paths and permissions
-- 🔑 Generate secure JWT secret
+- 🔑 Generate secure secrets (API key, JWT secret)
 - 📦 Set up Docker containers
 - 🚀 Start the application
 - 🔧 Configure auto-start on boot
@@ -46,10 +41,10 @@ The script will:
 To customize the installation, you can use additional options:
 ```bash
 # Custom ports
-curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | sudo bash -s -- --api-port 8081 --frontend-port 3001
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash -s -- --api-port 8081 --frontend-port 3001
 
 # Force reinstall with custom ports
-curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | sudo bash -s -- --force --api-port 8081 --frontend-port 3001
+curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | bash -s -- --force --api-port 8081 --frontend-port 3001
 ```
 
 Available options:
@@ -58,29 +53,69 @@ Available options:
 - `--frontend-port PORT` - Set frontend port (default: 3000)
 - `install_dir` - Optional installation directory (default: `/opt/mboxmini` on Linux, `~/mboxmini` on macOS)
 
-To update to the latest version, simply run the same script again:
-```bash
-./scripts/easy-install.sh
-```
-The script will detect the existing installation and offer to update to the latest version.
+To update to the latest version, simply run the installation script again. It will detect the existing installation and offer to update.
 
-To force a complete reinstallation (this will backup existing Minecraft data):
-```bash
-# For macOS:
-./scripts/easy-install.sh --force
+The script handles various scenarios:
+- 🐳 Docker installed via package manager or snap
+- 🔒 Proper permissions setup
+- 🔄 Auto-start service configuration
+- 💾 Data persistence across updates
+- 🌐 Dynamic port configuration
+- 🔐 Secure environment variable handling
 
-# For Linux (with sudo):
-sudo ./scripts/easy-install.sh --force
+### Server Configuration
 
-# Or directly with curl on Linux:
-curl -fsSL https://raw.githubusercontent.com/mboxmini/mboxmini/main/scripts/easy-install.sh | sudo bash -s -- --force
-```
+After installation, your server will be available at:
+- 🌐 Web Interface: `http://localhost:3000` (or your configured frontend port)
+- 📊 Management API: `http://localhost:8080` (or your configured API port)
+- 🎮 Minecraft Servers: Ports are automatically assigned starting from 25565
 
-The force reinstall will:
-- 💾 Backup existing Minecraft data
-- 🧹 Remove existing installation
-- 🚫 Stop and remove services
-- ✨ Perform fresh installation
+The web interface allows you to:
+- Create and manage multiple Minecraft servers
+- Configure server properties (memory, version, type)
+- Set environment variables
+- View server console and execute commands
+- Monitor player activity
+- Start/stop/delete servers
+
+### Environment Variables
+
+You can configure various server parameters through environment variables:
+- Memory allocation
+- Server version
+- Server type (VANILLA, FORGE, etc.)
+- View distance
+- Auto-pause settings
+- And many more server-specific options
+
+All configuration is persisted and survives container restarts.
+
+### Troubleshooting
+
+If you encounter any issues:
+1. Check the logs:
+   ```bash
+   cd /opt/mboxmini  # or your installation directory
+   docker compose logs -f
+   ```
+
+2. Verify permissions:
+   ```bash
+   # Check Docker socket permissions
+   ls -l /var/run/docker.sock
+   # Should show: srw-rw-rw-
+   ```
+
+3. Service management:
+   ```bash
+   # On Linux:
+   sudo systemctl status mboxmini
+   
+   # On macOS:
+   launchctl list | grep mboxmini
+   ```
+
+For more detailed configuration options and troubleshooting, please visit our documentation.
 
 ### Manual Installation (Pre-built Images)
 
