@@ -261,6 +261,23 @@ func (m *Manager) ListServers() ([]ServerInfo, error) {
 		}
 		
 		log.Printf("Processing Minecraft server: %s", name)
+
+		// Get container details to extract version from environment variables
+		inspect, err := m.client.ContainerInspect(context.Background(), container.ID)
+		if err != nil {
+			log.Printf("Error inspecting container %s: %v", container.ID, err)
+			continue
+		}
+
+		// Extract version from environment variables
+		version := "latest"
+		for _, env := range inspect.Config.Env {
+			if strings.HasPrefix(env, "VERSION=") {
+				version = strings.TrimPrefix(env, "VERSION=")
+				break
+			}
+		}
+		log.Printf("Server version: %s", version)
 		
 		// Get port mapping
 		port := 0
@@ -293,7 +310,7 @@ func (m *Manager) ListServers() ([]ServerInfo, error) {
 			Name:    strings.TrimPrefix(name, "mboxmini-"),
 			Status:  status,
 			Port:    port,
-			Version: "latest", // We'll get the actual version later if needed
+			Version: version,
 			Players: players,
 		}
 		log.Printf("Adding server: %+v", serverInfo)
