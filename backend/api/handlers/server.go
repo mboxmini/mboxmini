@@ -15,9 +15,12 @@ type ServerHandler struct {
 }
 
 type CreateServerRequest struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Memory  string `json:"memory,omitempty"`
+	Name           string `json:"name"`
+	Version        string `json:"version"`
+	Memory         string `json:"memory,omitempty"`
+	Type           string `json:"type,omitempty"`
+	PauseWhenEmpty int    `json:"pauseWhenEmpty,omitempty"`
+	ViewDistance   int    `json:"viewDistance,omitempty"`
 }
 
 type ServerResponse struct {
@@ -88,7 +91,14 @@ func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID, err := h.dockerManager.CreateServer(req.Name, req.Version, req.Memory)
+	serverID, err := h.dockerManager.CreateServer(
+		req.Name,
+		req.Version,
+		req.Memory,
+		req.Type,
+		req.PauseWhenEmpty,
+		req.ViewDistance,
+	)
 	if err != nil {
 		log.Printf("Error creating server: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

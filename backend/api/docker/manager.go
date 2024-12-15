@@ -92,12 +92,23 @@ func (m *Manager) findAvailablePort() (int, error) {
 	return 0, fmt.Errorf("no available ports in range %d-%d", m.portStart, m.portEnd)
 }
 
-func (m *Manager) CreateServer(name, version, memory string) (string, error) {
-	log.Printf("Starting server creation - Name: %s, Version: %s, Memory: %s", name, version, memory)
+func (m *Manager) CreateServer(name, version, memory string, serverType string, pauseWhenEmpty int, viewDistance int) (string, error) {
+	log.Printf("Starting server creation - Name: %s, Version: %s, Memory: %s, Type: %s, PauseWhenEmpty: %d, ViewDistance: %d", 
+		name, version, memory, serverType, pauseWhenEmpty, viewDistance)
 
 	if memory == "" {
 		memory = "2G"
 		log.Printf("Using default memory: %s", memory)
+	}
+
+	if serverType == "" {
+		serverType = "VANILLA"
+		log.Printf("Using default type: %s", serverType)
+	}
+
+	if viewDistance == 0 {
+		viewDistance = 32
+		log.Printf("Using default view distance: %d", viewDistance)
 	}
 
 	port, err := m.findAvailablePort()
@@ -170,10 +181,12 @@ func (m *Manager) CreateServer(name, version, memory string) (string, error) {
 	env := []string{
 		"EULA=TRUE",
 		fmt.Sprintf("VERSION=%s", version),
-		"TYPE=VANILLA",
+		fmt.Sprintf("TYPE=%s", serverType),
 		fmt.Sprintf("MEMORY=%s", memory),
+		fmt.Sprintf("PAUSE_WHEN_EMPTY_SECONDS=%d", pauseWhenEmpty),
+		fmt.Sprintf("VIEW_DISTANCE=%d", viewDistance),
 	}
-	log.Printf("Environment variables: %v", env)
+	log.Printf("Minecraft container environment variables: %v", env)
 
 	// Create Minecraft server container
 	containerConfig := &container.Config{
