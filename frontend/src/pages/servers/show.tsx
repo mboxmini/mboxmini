@@ -7,6 +7,7 @@ import { Server } from "@/interfaces";
 import { startServer, stopServer, deleteServer } from "@/api/servers";
 import { Console } from "@/components/console";
 import { PlayerList } from "@/components/player-list";
+import { EnvVarEditor } from "@/components/EnvVarEditor";
 
 const { Title } = Typography;
 
@@ -199,6 +200,9 @@ export const ServerShow: React.FC = () => {
                   </Card>
 
                   <Card type="inner" title="Environment Variables" style={{ marginTop: '16px' }}>
+                    {record?.status === "running" && (
+                      <EnvVarEditor serverId={record.id} />
+                    )}
                     <Descriptions column={1}>
                       {record?.env && Object.entries(record.env)
                         .filter(([key]) => ![

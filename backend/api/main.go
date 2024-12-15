@@ -46,8 +46,8 @@ func main() {
 	// Initialize router
 	r := mux.NewRouter()
 
-	// Apply CORS middleware to the root router
-	r.Use(middleware.CORS)
+	// Apply CORS middleware to all routes
+	corsRouter := middleware.CORS(r)
 
 	// Public endpoints (no auth required)
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +75,7 @@ func main() {
 	}
 
 	log.Printf("Starting server on port %s", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
+	if err := http.ListenAndServe(":"+port, corsRouter); err != nil {
 		log.Fatal(err)
 	}
 }

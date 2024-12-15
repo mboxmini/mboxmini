@@ -28,12 +28,16 @@ type Manager struct {
 }
 
 type ServerInfo struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Status  string   `json:"status"`
-	Version string   `json:"version"`
-	Port    int      `json:"port"`
-	Players []string `json:"players"`
+	ID      string            `json:"id"`
+	Name    string            `json:"name"`
+	Status  string            `json:"status"`
+	Version string            `json:"version"`
+	Port    int              `json:"port"`
+	Players []string         `json:"players"`
+	Image   string           `json:"image"`
+	Type    string           `json:"type"`
+	Memory  string           `json:"memory"`
+	Env     map[string]string `json:"env"`
 }
 
 func NewManager(dataPath string, portStart, portEnd int) (*Manager, error) {
@@ -340,12 +344,12 @@ func (m *Manager) GetServerStatus(serverID string) (*ServerInfo, error) {
 		return nil, fmt.Errorf("failed to inspect container: %v", err)
 	}
 
-	// Extract version from environment variables
-	var version string
-	for _, env := range inspect.Config.Env {
-		if strings.HasPrefix(env, "VERSION=") {
-			version = strings.TrimPrefix(env, "VERSION=")
-			break
+	// Extract environment variables into a map
+	env := make(map[string]string)
+	for _, envVar := range inspect.Config.Env {
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) == 2 {
+			env[parts[0]] = parts[1]
 		}
 	}
 
@@ -375,9 +379,13 @@ func (m *Manager) GetServerStatus(serverID string) (*ServerInfo, error) {
 		ID:      serverID,
 		Name:    strings.TrimPrefix(strings.TrimPrefix(inspect.Name, "/"), "mboxmini-"),
 		Status:  inspect.State.Status,
-		Version: version,
+		Version: env["VERSION"],
 		Port:    port,
 		Players: players,
+		Image:   inspect.Config.Image,
+		Type:    env["TYPE"],
+		Memory:  env["MEMORY"],
+		Env:     env,
 	}, nil
 }
 

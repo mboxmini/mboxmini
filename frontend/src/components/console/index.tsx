@@ -80,31 +80,33 @@ export const Console: React.FC<Props> = ({ serverId }) => {
     }
   }, [executing]);
 
-  const handleExecuteCommand = async () => {
+  const appendToConsole = (text: string, type: 'normal' | 'error' = 'normal') => {
+    const timestamp = new Date().toLocaleTimeString();
+    setMessages(prev => [...prev, {
+      text,
+      isError: type === 'error',
+      timestamp
+    }]);
+  };
+
+  const handleSendCommand = async () => {
     if (!command.trim()) return;
 
     const timestamp = new Date().toLocaleTimeString();
-    setMessages(prev => [...prev, { text: `> ${command}`, timestamp }]);
+    appendToConsole(`> ${command}`);
     setExecuting(true);
 
     try {
-      const response = await executeCommand(serverId, command);
-      if (response.status === 'error') {
-        setMessages(prev => [
-          ...prev,
-          { text: response.error || 'Unknown error', isError: true, timestamp },
-        ]);
-      } else {
-        setMessages(prev => [...prev, { text: response.output || '', timestamp }]);
+      const result = await executeCommand(serverId, command);
+      if (result.error) {
+        appendToConsole(`Error: ${result.error}`, 'error');
+      } else if (result.response) {
+        appendToConsole(result.response);
       }
-    } catch (error) {
-      console.error('Error executing command:', error);
-      setMessages(prev => [
-        ...prev,
-        { text: 'Failed to execute command', isError: true, timestamp },
-      ]);
-    } finally {
       setCommand('');
+    } catch (error) {
+      appendToConsole('Failed to execute command', 'error');
+    } finally {
       setExecuting(false);
     }
   };
@@ -124,7 +126,7 @@ export const Console: React.FC<Props> = ({ serverId }) => {
           placeholder="Enter command..."
           value={command}
           onChange={e => setCommand(e.target.value)}
-          onPressEnter={handleExecuteCommand}
+          onPressEnter={handleSendCommand}
           disabled={executing}
           style={{ flex: 1 }}
           autoFocus
@@ -132,7 +134,7 @@ export const Console: React.FC<Props> = ({ serverId }) => {
         <Button
           type="primary"
           icon={<SendOutlined />}
-          onClick={handleExecuteCommand}
+          onClick={handleSendCommand}
           loading={executing}
         >
           Execute

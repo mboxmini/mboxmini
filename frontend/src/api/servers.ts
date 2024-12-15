@@ -10,11 +10,6 @@ export const getServers = async (): Promise<Server[]> => {
   return data;
 };
 
-export const getServer = async (id: string): Promise<Server> => {
-  const { data } = await axiosInstance.get(`/api/servers/${id}`);
-  return data;
-};
-
 export const createServer = async (request: CreateServerRequest): Promise<string> => {
   const { data } = await axiosInstance.post("/api/servers", request);
   return data.id;
@@ -37,8 +32,8 @@ export const deleteServer = async (id: string, options: DeleteServerOptions): Pr
 export const executeCommand = async (
   serverId: string,
   command: string
-): Promise<{ status: string; output?: string; error?: string }> => {
-  const { data } = await axiosInstance.post(`/api/servers/${serverId}/command`, {
+): Promise<{ response?: string; error?: string }> => {
+  const { data } = await axiosInstance.post(`/api/servers/${serverId}/execute`, {
     command,
   });
   return data;

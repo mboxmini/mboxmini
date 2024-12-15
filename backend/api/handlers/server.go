@@ -52,7 +52,7 @@ func (h *ServerHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/servers/{id}", h.DeleteServer).Methods("DELETE", "OPTIONS")
 	r.HandleFunc("/servers/{id}/start", h.StartServer).Methods("POST", "OPTIONS")
 	r.HandleFunc("/servers/{id}/stop", h.StopServer).Methods("POST", "OPTIONS")
-	r.HandleFunc("/servers/{id}/command", h.ExecuteCommand).Methods("POST", "OPTIONS")
+	r.HandleFunc("/servers/{id}/execute", h.ExecuteCommand).Methods("POST", "OPTIONS")
 	r.HandleFunc("/servers/{id}/players", h.GetPlayers).Methods("GET", "OPTIONS")
 }
 
